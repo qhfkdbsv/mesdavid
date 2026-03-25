@@ -6,7 +6,7 @@
     <meta name="theme-color" content="#0f1724">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <title>Давид мессенджер 1580 | Уведомления</title>
+    <title>Давид мессенджер 1580 | Запомнить меня</title>
     <!-- Firebase SDK -->
     <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
@@ -543,7 +543,6 @@
             font-size: 0.85rem;
         }
 
-        /* Уведомление */
         .notification-toast {
             position: fixed;
             top: 20px;
@@ -649,6 +648,23 @@
             font-size: 0.95rem;
             color: white;
             margin-top: 16px;
+            cursor: pointer;
+        }
+
+        .remember-me {
+            display: flex;
+            align-items: center;
+            justify-content: flex-start;
+            gap: 8px;
+            margin: 12px 0;
+            color: #94a3b8;
+            font-size: 0.85rem;
+        }
+
+        .remember-me input {
+            width: auto;
+            margin: 0;
+            transform: scale(1.2);
             cursor: pointer;
         }
 
@@ -770,6 +786,10 @@
         <input type="text" id="authLogin" placeholder="Логин (латиница и цифры)" autocomplete="off">
         <input type="text" id="authName" placeholder="Ваше имя" autocomplete="off">
         <input type="password" id="authPassword" placeholder="Пароль (мин. 4 символа)" autocomplete="new-password">
+        <div class="remember-me">
+            <input type="checkbox" id="rememberMe" checked>
+            <label for="rememberMe">Запомнить меня</label>
+        </div>
         <button id="authSubmitBtn">Зарегистрироваться</button>
         <div class="auth-switch" id="toLoginBtn">Уже есть аккаунт? <span>Войти</span></div>
         <div id="authError" class="error-msg"></div>
@@ -813,6 +833,7 @@
     const toLoginBtn = document.getElementById('toLoginBtn');
     const authErrorSpan = document.getElementById('authError');
     const authTitle = document.getElementById('authTitle');
+    const rememberMeCheckbox = document.getElementById('rememberMe');
     const currentUsernameDisplay = document.getElementById('currentUsernameDisplay');
     const logoutBtn = document.getElementById('logoutBtn');
     const searchUsernameInput = document.getElementById('searchUsernameInput');
@@ -828,21 +849,42 @@
 
     let isLoginMode = false;
 
+    // ========== СОХРАНЕНИЕ СЕССИИ ==========
+    function saveSession(user) {
+        if (rememberMeCheckbox && rememberMeCheckbox.checked) {
+            localStorage.setItem('david_messenger_user', JSON.stringify({
+                login: user.login,
+                name: user.name,
+                savedAt: Date.now()
+            }));
+        }
+    }
+
+    function loadSession() {
+        const saved = localStorage.getItem('david_messenger_user');
+        if (saved) {
+            try {
+                const user = JSON.parse(saved);
+                return user;
+            } catch(e) {
+                return null;
+            }
+        }
+        return null;
+    }
+
+    function clearSession() {
+        localStorage.removeItem('david_messenger_user');
+    }
+
     // ========== ЗВУК УВЕДОМЛЕНИЯ ==========
     function initNotificationSound() {
         try {
-            // Создаём звук через Web Audio API для более надёжного воспроизведения
             const AudioContext = window.AudioContext || window.webkitAudioContext;
             if (AudioContext) {
-                const audioCtx = new AudioContext();
-                const oscillator = audioCtx.createOscillator();
-                const gainNode = audioCtx.createGain();
-                
-                oscillator.connect(gainNode);
-                gainNode.connect(audioCtx.destination);
-                
                 notificationSound = {
                     play: () => {
+                        const audioCtx = new AudioContext();
                         if (audioCtx.state === 'suspended') {
                             audioCtx.resume();
                         }
@@ -856,18 +898,13 @@
                         osc.start();
                         gain.gain.exponentialRampToValueAtTime(0.00001, now + 0.5);
                         osc.stop(now + 0.5);
+                        setTimeout(() => audioCtx.close(), 600);
                     }
                 };
             } else {
-                // Fallback: простое beep
-                notificationSound = {
-                    play: () => {
-                        console.log('🔔 Новое сообщение!');
-                    }
-                };
+                notificationSound = { play: () => {} };
             }
         } catch(e) {
-            console.log('Звук не поддерживается');
             notificationSound = { play: () => {} };
         }
     }
@@ -880,11 +917,10 @@
 
     // ========== УВЕДОМЛЕНИЯ ==========
     function showNotification(title, message, senderLogin = null) {
-        // Показываем тост-уведомление
         const toast = document.createElement('div');
         toast.className = 'notification-toast';
         toast.innerHTML = `
-            <div class="notification-title">${title}</div>
+            <div class="notification-title">${escapeHtml(title)}</div>
             <div class="notification-message">${escapeHtml(message)}</div>
         `;
         
@@ -900,7 +936,6 @@
         
         document.body.appendChild(toast);
         
-        // Автоматически скрываем через 5 секунд
         setTimeout(() => {
             if (toast) {
                 toast.classList.add('hide');
@@ -908,7 +943,6 @@
             }
         }, 5000);
         
-        // Если страница не активна, отправляем браузерное уведомление
         if (!isPageActive && 'Notification' in window && Notification.permission === 'granted') {
             new Notification(title, {
                 body: message,
@@ -916,25 +950,19 @@
             });
         }
         
-        // Воспроизводим звук
         playNotificationSound();
     }
 
-    // Запрос разрешения на уведомления
     function requestNotificationPermission() {
         if ('Notification' in window && Notification.permission !== 'granted' && Notification.permission !== 'denied') {
             Notification.requestPermission();
         }
     }
 
-    // Отслеживание активности страницы
     document.addEventListener('visibilitychange', () => {
         isPageActive = !document.hidden;
-        if (isPageActive) {
-            // Когда возвращаемся на страницу, обновляем статус прочтения
-            if (activeChatWith) {
-                markAsRead(activeChatWith);
-            }
+        if (isPageActive && activeChatWith) {
+            markAsRead(activeChatWith);
         }
     });
 
@@ -1100,14 +1128,11 @@
             const data = snapshot.val();
             const messages = data ? Object.values(data).sort((a,b) => a.timestamp - b.timestamp) : [];
             
-            // Проверяем новые сообщения для уведомлений
             if (messages.length > lastMessageCount && lastMessageCount > 0) {
                 const newMessages = messages.slice(lastMessageCount);
                 for (const msg of newMessages) {
                     if (msg.to === currentUser?.login && !msg.read && !msg.deleted && msg.from !== currentUser?.login) {
-                        // Показываем уведомление
-                        const senderName = msg.from;
-                        showNotification(`📩 Новое сообщение от ${senderName}`, msg.text.substring(0, 50), msg.from);
+                        showNotification(`📩 Новое сообщение от ${msg.from}`, msg.text.substring(0, 50), msg.from);
                     }
                 }
             }
@@ -1287,13 +1312,16 @@
             msgInput.setSelectionRange(len, len);
             msgInput.oninput = (e) => { savedInputText = e.target.value; isTyping = true; };
             msgInput.onblur = () => { isTyping = false; };
-            // Enter для отправки сообщения
-            msgInput.onkeypress = (e) => {
-                if(e.key === 'Enter') {
+            // Исправленный Enter для отправки
+            msgInput.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
                     e.preventDefault();
-                    if(sendBtn) sendBtn.click();
+                    const currentSendBtn = document.getElementById('sendMsgBtn');
+                    if (currentSendBtn) {
+                        currentSendBtn.click();
+                    }
                 }
-            };
+            });
         }
         
         if(sendBtn) {
@@ -1444,6 +1472,24 @@
         return await verifyUser(validateLogin(login), validatePassword(password));
     }
 
+    async function autoLogin() {
+        const savedSession = loadSession();
+        if (savedSession && savedSession.login) {
+            try {
+                const user = await findUserByLogin(savedSession.login);
+                if (user) {
+                    setCurrentUser(user);
+                    authOverlay.style.display = 'none';
+                    appContainer.style.display = 'flex';
+                    return true;
+                }
+            } catch(e) {
+                console.log('Автовход не удался');
+            }
+        }
+        return false;
+    }
+
     function setCurrentUser(user) {
         currentUser = user;
         currentUsernameDisplay.innerText = user.name + ' (@' + user.login + ')';
@@ -1461,6 +1507,7 @@
         if(unsubscribeMessages) unsubscribeMessages();
         currentUser = null;
         activeChatWith = null;
+        clearSession();
         appContainer.style.display = 'none';
         authOverlay.style.display = 'flex';
     }
@@ -1472,12 +1519,16 @@
         authErrorSpan.innerText = '';
         try {
             if(isLoginMode) {
-                setCurrentUser(await loginUser(login, password));
+                const user = await loginUser(login, password);
+                setCurrentUser(user);
+                saveSession(user);
                 authOverlay.style.display = 'none';
                 appContainer.style.display = 'flex';
             } else {
                 if(!name) throw new Error('Укажите имя');
-                setCurrentUser(await register(login, name, password));
+                const newUser = await register(login, name, password);
+                setCurrentUser(newUser);
+                saveSession(newUser);
                 authOverlay.style.display = 'none';
                 appContainer.style.display = 'flex';
             }
@@ -1532,11 +1583,17 @@
         }
     }, 3000);
 
-    // Инициализация
+    // Запуск с автовходом
     initNotificationSound();
     requestNotificationPermission();
-    authOverlay.style.display = 'flex';
-    appContainer.style.display = 'none';
+    
+    // Пытаемся войти автоматически
+    autoLogin().then(autoLogged => {
+        if (!autoLogged) {
+            authOverlay.style.display = 'flex';
+            appContainer.style.display = 'none';
+        }
+    });
 </script>
 </body>
 </html>

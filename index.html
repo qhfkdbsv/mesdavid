@@ -3,13 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Давид мессенджер 1580 | Защищённый</title>
+    <title>Давид мессенджер 1580 | Прочитано ✅</title>
     <!-- Firebase SDK -->
     <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
     <style>
-        /* ... все стили такие же, как в предыдущей версии ... */
         * {
             margin: 0;
             padding: 0;
@@ -370,6 +368,10 @@
             color: white;
         }
 
+        .message.incoming .message-actions button {
+            color: #94a3b8;
+        }
+
         .message-actions button:hover {
             background: #334155;
             transform: scale(1.05);
@@ -466,9 +468,8 @@
             outline: none;
         }
 
-        .auth-card input[type="email"],
         .auth-card input[type="password"] {
-            letter-spacing: normal;
+            letter-spacing: 2px;
         }
 
         .auth-card button {
@@ -563,7 +564,7 @@
 
 <div class="app-container" id="appContainer" style="display: none;">
     <div class="chat-header">
-        <div class="logo">✨ Давид мессенджер 1580 🔒</div>
+        <div class="logo">✨ Давид мессенджер 1580 ✅</div>
         <div class="user-status">
             <span id="currentUsernameDisplay"></span>
             <button class="logout-btn" id="logoutBtn">Выйти</button>
@@ -595,10 +596,9 @@
 <div class="auth-overlay" id="authOverlay">
     <div class="auth-card">
         <h2 id="authTitle">📱 Регистрация</h2>
-        <input type="email" id="authEmail" placeholder="Email" autocomplete="off">
-        <input type="text" id="authLogin" placeholder="Логин (латиница и цифры)" autocomplete="off">
+        <input type="text" id="authLogin" placeholder="Логин (латиница и цифры, без пробелов)" autocomplete="off">
         <input type="text" id="authName" placeholder="Ваше имя" autocomplete="off">
-        <input type="password" id="authPassword" placeholder="Пароль (минимум 6 символов)" autocomplete="new-password">
+        <input type="password" id="authPassword" placeholder="Пароль (минимум 4 символа)" autocomplete="new-password">
         <button id="authSubmitBtn">Зарегистрироваться</button>
         <div class="auth-switch" id="toLoginBtn">Уже есть аккаунт? <span>Войти</span></div>
         <div id="authError" class="error-msg"></div>
@@ -620,10 +620,8 @@
 
     firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
-    const auth = firebase.auth();
 
     let currentUser = null;
-    let currentUserData = null;
     let activeChatWith = null;
     let currentChatMessages = [];
     let unsubscribeMessages = null;
@@ -631,10 +629,8 @@
     let isTyping = false;
     let onlineStatusInterval = null;
 
-    // DOM элементы
     const authOverlay = document.getElementById('authOverlay');
     const appContainer = document.getElementById('appContainer');
-    const authEmail = document.getElementById('authEmail');
     const authLoginInput = document.getElementById('authLogin');
     const authNameInput = document.getElementById('authName');
     const authPasswordInput = document.getElementById('authPassword');
@@ -658,15 +654,38 @@
         return str.replace(/[.#$[\]/]/g, '_').replace(/ /g, '_');
     }
 
+    function validateLogin(login) {
+        if (!login || login.trim() === '') throw new Error('Логин не может быть пустым');
+        const regex = /^[a-zA-Z0-9_]+$/;
+        if (!regex.test(login)) throw new Error('Логин может содержать только латинские буквы, цифры и нижнее подчёркивание');
+        if (login.length < 3) throw new Error('Логин должен быть не менее 3 символов');
+        return login.trim();
+    }
+
+    function validatePassword(password) {
+        if (!password || password.trim() === '') throw new Error('Пароль не может быть пустым');
+        if (password.length < 4) throw new Error('Пароль должен быть не менее 4 символов');
+        return password;
+    }
+
+    function hashPassword(password) {
+        let hash = 0;
+        for (let i = 0; i < password.length; i++) {
+            const char = password.charCodeAt(i);
+            hash = ((hash << 5) - hash) + char;
+            hash = hash & hash;
+        }
+        return hash.toString(36) + '_' + password.length;
+    }
+
     // ========== ОНЛАЙН СТАТУС ==========
     async function updateOnlineStatus(isOnline) {
-        if (!currentUserData) return;
-        const safeLogin = encodeForFirebase(currentUserData.login);
+        if (!currentUser) return;
+        const safeLogin = encodeForFirebase(currentUser.login);
         await db.ref(`online/${safeLogin}`).set({
             status: isOnline,
             lastSeen: Date.now(),
-            name: currentUserData.name,
-            uid: currentUser.uid
+            name: currentUser.name
         });
     }
 
@@ -685,13 +704,13 @@
         if (onlineStatusInterval) clearInterval(onlineStatusInterval);
         updateOnlineStatus(true);
         onlineStatusInterval = setInterval(() => {
-            if (currentUserData) {
+            if (currentUser) {
                 updateOnlineStatus(true);
             }
         }, 5000);
         
         window.addEventListener('beforeunload', () => {
-            if (currentUserData) {
+            if (currentUser) {
                 updateOnlineStatus(false);
             }
         });
@@ -702,27 +721,29 @@
             clearInterval(onlineStatusInterval);
             onlineStatusInterval = null;
         }
-        if (currentUserData) {
+        if (currentUser) {
             updateOnlineStatus(false);
         }
     }
 
     // ========== ОТМЕТКИ О ПРОЧТЕНИИ ==========
     async function markMessageAsRead(messageId, fromUser, toUser) {
-        if (toUser !== currentUserData?.login) return;
+        // Отмечаем сообщение как прочитанное только если оно адресовано текущему пользователю
+        if (toUser !== currentUser.login) return;
+        
         const chatId = [encodeForFirebase(fromUser), encodeForFirebase(toUser)].sort().join('_');
         await db.ref(`messages/${chatId}/${messageId}/read`).set(true);
         await db.ref(`messages/${chatId}/${messageId}/readAt`).set(Date.now());
     }
 
     async function markAllMessagesAsRead(withUser) {
-        const chatId = [encodeForFirebase(currentUserData.login), encodeForFirebase(withUser)].sort().join('_');
+        const chatId = [encodeForFirebase(currentUser.login), encodeForFirebase(withUser)].sort().join('_');
         const snapshot = await db.ref(`messages/${chatId}`).once('value');
         const messages = snapshot.val() || {};
         
         const updates = {};
         for (const [msgId, msg] of Object.entries(messages)) {
-            if (msg.to === currentUserData.login && !msg.read && !msg.deleted) {
+            if (msg.to === currentUser.login && !msg.read && !msg.deleted) {
                 updates[`${msgId}/read`] = true;
                 updates[`${msgId}/readAt`] = Date.now();
             }
@@ -745,32 +766,20 @@
         return snapshot.val();
     }
 
-    async function saveUser(uid, login, name, email) {
+    async function saveUser(login, name, password) {
         const safeLogin = encodeForFirebase(login);
         await db.ref(`users/${safeLogin}`).set({
-            uid: uid,
-            login: login,
-            safeLogin: safeLogin,
-            name: name,
-            email: email,
+            login, safeLogin, name,
+            passwordHash: hashPassword(password),
             createdAt: Date.now()
         });
     }
 
-    async function createUserWithEmail(email, password, login, name) {
-        const userCredential = await auth.createUserWithEmailAndPassword(email, password);
-        const user = userCredential.user;
-        await saveUser(user.uid, login, name, email);
-        return { uid: user.uid, login, name, email };
-    }
-
-    async function signInWithEmail(email, password) {
-        const userCredential = await auth.signInWithEmailAndPassword(email, password);
-        const user = userCredential.user;
-        const users = await getAllUsers();
-        const userData = users.find(u => u.uid === user.uid);
-        if (!userData) throw new Error('Пользователь не найден в базе');
-        return userData;
+    async function verifyUser(login, password) {
+        const user = await findUserByLogin(login);
+        if (!user) throw new Error('Пользователь не найден');
+        if (user.passwordHash !== hashPassword(password)) throw new Error('Неверный пароль');
+        return user;
     }
 
     function subscribeToMessages(user1, user2, callback) {
@@ -780,8 +789,9 @@
             const data = snapshot.val();
             const messages = data ? Object.values(data).sort((a,b) => a.timestamp - b.timestamp) : [];
             
+            // Автоматически отмечаем прочитанными сообщения, адресованные текущему пользователю
             for (const msg of messages) {
-                if (msg.to === currentUserData?.login && !msg.read && !msg.deleted) {
+                if (msg.to === currentUser?.login && !msg.read && !msg.deleted) {
                     await markMessageAsRead(msg.id, msg.from, msg.to);
                 }
             }
@@ -793,10 +803,10 @@
 
     async function sendMessage(toLogin, text) {
         if(!text.trim()) return;
-        const chatId = [encodeForFirebase(currentUserData.login), encodeForFirebase(toLogin)].sort().join('_');
+        const chatId = [encodeForFirebase(currentUser.login), encodeForFirebase(toLogin)].sort().join('_');
         const newMsg = {
             id: Date.now() + '_' + Math.random().toString(36).substr(2, 9),
-            from: currentUserData.login,
+            from: currentUser.login,
             to: toLogin,
             text: text.trim(),
             timestamp: Date.now(),
@@ -807,23 +817,23 @@
         await db.ref(`messages/${chatId}/${newMsg.id}`).set(newMsg);
         
         const lastText = text.trim().substring(0, 50);
-        const safeCurrent = encodeForFirebase(currentUserData.login);
+        const safeCurrent = encodeForFirebase(currentUser.login);
         const safeTarget = encodeForFirebase(toLogin);
         await db.ref(`lastMessages/${safeCurrent}/${safeTarget}`).set({ lastText, timestamp: Date.now(), withUser: toLogin });
-        await db.ref(`lastMessages/${safeTarget}/${safeCurrent}`).set({ lastText, timestamp: Date.now(), withUser: currentUserData.login });
+        await db.ref(`lastMessages/${safeTarget}/${safeCurrent}`).set({ lastText, timestamp: Date.now(), withUser: currentUser.login });
         
         const unread = await db.ref(`unread/${safeTarget}/${safeCurrent}`).once('value');
         await db.ref(`unread/${safeTarget}/${safeCurrent}`).set((unread.val() || 0) + 1);
     }
 
     async function deleteMessage(messageId, withUser) {
-        const chatId = [encodeForFirebase(currentUserData.login), encodeForFirebase(withUser)].sort().join('_');
+        const chatId = [encodeForFirebase(currentUser.login), encodeForFirebase(withUser)].sort().join('_');
         await db.ref(`messages/${chatId}/${messageId}/deleted`).set(true);
     }
 
     async function editMessage(messageId, withUser, newText) {
         if(!newText.trim()) return;
-        const chatId = [encodeForFirebase(currentUserData.login), encodeForFirebase(withUser)].sort().join('_');
+        const chatId = [encodeForFirebase(currentUser.login), encodeForFirebase(withUser)].sort().join('_');
         await db.ref(`messages/${chatId}/${messageId}`).update({
             text: newText.trim(),
             edited: true,
@@ -832,7 +842,7 @@
     }
 
     async function markAsRead(withUser) {
-        const safeCurrent = encodeForFirebase(currentUserData.login);
+        const safeCurrent = encodeForFirebase(currentUser.login);
         const safeTarget = encodeForFirebase(withUser);
         await db.ref(`unread/${safeCurrent}/${safeTarget}`).set(0);
         await markAllMessagesAsRead(withUser);
@@ -868,7 +878,7 @@
         modal.onclick = (e) => { if(e.target === modal) modal.remove(); };
     }
 
-    // Рендер сообщений
+    // Рендер с отображением статуса прочтения
     async function renderMessagesArea(messages) {
         if(!activeChatWith) {
             chatArea.innerHTML = `<div class="chat-placeholder">💬 Выберите чат или найдите пользователя</div>`;
@@ -879,10 +889,11 @@
         const onlineIcon = isPartnerOnline ? '<span class="online-indicator online"></span>' : '<span class="online-indicator offline"></span>';
         
         const messagesHtml = messages.filter(msg => !msg.deleted).map(msg => {
-            const isOutgoing = msg.from === currentUserData.login;
+            const isOutgoing = msg.from === currentUser.login;
             const time = new Date(msg.timestamp).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
             const editedMark = msg.edited ? '<span class="message-edited">(изменено)</span>' : '';
             
+            // Статус прочтения для исходящих сообщений
             let readStatusHtml = '';
             if (isOutgoing) {
                 if (msg.read) {
@@ -929,7 +940,7 @@
             const msgDiv = btn.closest('.message');
             const msgId = msgDiv?.getAttribute('data-message-id');
             const msg = messages.find(m => m.id === msgId);
-            if(msg && msg.from === currentUserData.login) {
+            if(msg && msg.from === currentUser.login) {
                 btn.onclick = () => showEditModal(msg.id, msg.text, activeChatWith);
             }
         });
@@ -979,8 +990,8 @@
     }
 
     async function renderChatsList() {
-        if(!currentUserData) return;
-        const safeCurrent = encodeForFirebase(currentUserData.login);
+        if(!currentUser) return;
+        const safeCurrent = encodeForFirebase(currentUser.login);
         const snapshot = await db.ref(`lastMessages/${safeCurrent}`).once('value');
         const chats = snapshot.val() || {};
         const chatsArray = Object.values(chats).sort((a,b) => b.timestamp - a.timestamp);
@@ -1024,7 +1035,7 @@
         savedInputText = '';
         isTyping = false;
         await markAsRead(partnerLogin);
-        unsubscribeMessages = subscribeToMessages(currentUserData.login, partnerLogin, (messages) => {
+        unsubscribeMessages = subscribeToMessages(currentUser.login, partnerLogin, (messages) => {
             currentChatMessages = messages;
             renderMessagesArea(messages);
         });
@@ -1033,7 +1044,7 @@
 
     async function renderAllContacts() {
         const users = await getAllUsers();
-        const filtered = users.filter(u => u.login !== currentUserData.login);
+        const filtered = users.filter(u => u.login !== currentUser.login);
         if(filtered.length === 0) {
             allContactsArea.innerHTML = '<div style="color:#94a3b8; text-align:center; padding:10px;">Нет других пользователей</div>';
             return;
@@ -1066,7 +1077,7 @@
         const query = searchUsernameInput.value.trim();
         if(!query) return;
         const user = await findUserByLogin(query);
-        if(user && user.login !== currentUserData.login) {
+        if(user && user.login !== currentUser.login) {
             const isOnline = await getUserOnlineStatus(user.login);
             const onlineIcon = isOnline ? '<span class="online-indicator online"></span>' : '<span class="online-indicator offline"></span>';
             searchResultArea.innerHTML = `
@@ -1089,16 +1100,20 @@
         }
     }
 
-    function validateLogin(login) {
-        if (!login || login.trim() === '') throw new Error('Логин не может быть пустым');
-        const regex = /^[a-zA-Z0-9_]+$/;
-        if (!regex.test(login)) throw new Error('Логин может содержать только латинские буквы, цифры и нижнее подчёркивание');
-        if (login.length < 3) throw new Error('Логин должен быть не менее 3 символов');
-        return login.trim();
+    async function register(login, name, password) {
+        login = validateLogin(login);
+        validatePassword(password);
+        if(await findUserByLogin(login)) throw new Error('Логин уже занят');
+        await saveUser(login, name, password);
+        return { login, name };
+    }
+
+    async function loginUser(login, password) {
+        return await verifyUser(validateLogin(login), validatePassword(password));
     }
 
     function setCurrentUser(user) {
-        currentUserData = user;
+        currentUser = user;
         currentUsernameDisplay.innerText = user.name + ' (@' + user.login + ')';
         activeChatWith = null;
         savedInputText = '';
@@ -1111,37 +1126,29 @@
     function logout() {
         stopOnlineHeartbeat();
         if(unsubscribeMessages) unsubscribeMessages();
-        auth.signOut();
-        currentUserData = null;
+        currentUser = null;
         activeChatWith = null;
         appContainer.style.display = 'none';
         authOverlay.style.display = 'flex';
     }
 
     authSubmitBtn.onclick = async () => {
-        const email = authEmail.value.trim();
         const login = authLoginInput.value.trim();
         const name = authNameInput.value.trim();
         const password = authPasswordInput.value;
         authErrorSpan.innerText = '';
-        
         try {
             if(isLoginMode) {
-                const user = await signInWithEmail(email, password);
-                setCurrentUser(user);
+                setCurrentUser(await loginUser(login, password));
                 authOverlay.style.display = 'none';
                 appContainer.style.display = 'flex';
             } else {
                 if(!name) throw new Error('Укажите имя');
-                validateLogin(login);
-                if (password.length < 6) throw new Error('Пароль должен быть не менее 6 символов');
-                const newUser = await createUserWithEmail(email, password, login, name);
-                setCurrentUser(newUser);
+                setCurrentUser(await register(login, name, password));
                 authOverlay.style.display = 'none';
                 appContainer.style.display = 'flex';
             }
             authPasswordInput.value = '';
-            authEmail.value = '';
         } catch(err) {
             authErrorSpan.innerText = err.message;
         }
@@ -1153,15 +1160,12 @@
             authTitle.innerText = '🔐 Вход';
             authSubmitBtn.innerText = 'Войти';
             authNameInput.style.display = 'none';
-            authLoginInput.style.display = 'none';
         } else {
             authTitle.innerText = '📱 Регистрация';
             authSubmitBtn.innerText = 'Зарегистрироваться';
             authNameInput.style.display = 'block';
-            authLoginInput.style.display = 'block';
         }
         authErrorSpan.innerText = '';
-        authEmail.value = '';
         authLoginInput.value = '';
         authNameInput.value = '';
         authPasswordInput.value = '';
@@ -1184,11 +1188,12 @@
         });
     }
 
+    // Обновляем статусы в реальном времени
     setInterval(() => {
-        if(currentUserData && activeChatWith) {
+        if(currentUser && activeChatWith) {
             renderMessagesArea(currentChatMessages);
         }
-        if(currentUserData) {
+        if(currentUser) {
             renderChatsList();
         }
     }, 3000);

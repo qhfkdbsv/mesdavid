@@ -2,8 +2,11 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Давид мессенджер 1580 | Прочитано ✅</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="theme-color" content="#0f1724">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>Давид мессенджер 1580 | Мобильный</title>
     <!-- Firebase SDK -->
     <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
@@ -13,6 +16,7 @@
             padding: 0;
             box-sizing: border-box;
             font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+            -webkit-tap-highlight-color: transparent;
         }
 
         body {
@@ -21,35 +25,38 @@
             display: flex;
             justify-content: center;
             align-items: center;
-            padding: 20px;
+            padding: 0;
+            margin: 0;
         }
 
         .app-container {
             width: 100%;
             max-width: 1400px;
-            height: 90vh;
-            min-height: 600px;
+            height: 100vh;
+            min-height: 100vh;
             background: rgba(255,255,255,0.05);
             backdrop-filter: blur(2px);
-            border-radius: 32px;
             box-shadow: 0 25px 45px rgba(0,0,0,0.3), 0 0 0 1px rgba(255,255,255,0.1);
             overflow: hidden;
             display: flex;
             flex-direction: column;
+            position: relative;
         }
 
+        /* Мобильная шапка */
         .chat-header {
             background: rgba(0,0,0,0.4);
-            padding: 16px 24px;
+            padding: 12px 16px;
             display: flex;
             justify-content: space-between;
             align-items: center;
             border-bottom: 1px solid rgba(255,255,255,0.15);
+            flex-shrink: 0;
         }
 
         .logo {
             font-weight: 700;
-            font-size: 1.5rem;
+            font-size: 1.2rem;
             background: linear-gradient(135deg, #a5f3fc, #38bdf8);
             -webkit-background-clip: text;
             background-clip: text;
@@ -59,21 +66,21 @@
 
         .user-status {
             background: #1e293b;
-            padding: 6px 16px;
+            padding: 4px 12px;
             border-radius: 40px;
             display: flex;
             align-items: center;
-            gap: 12px;
+            gap: 8px;
             color: white;
-            font-size: 0.9rem;
+            font-size: 0.8rem;
         }
 
         .online-indicator {
             display: inline-block;
-            width: 10px;
-            height: 10px;
+            width: 8px;
+            height: 8px;
             border-radius: 50%;
-            margin-right: 6px;
+            margin-right: 4px;
         }
 
         .online {
@@ -89,11 +96,12 @@
             background: rgba(239,68,68,0.8);
             border: none;
             color: white;
-            padding: 6px 14px;
+            padding: 4px 12px;
             border-radius: 30px;
             cursor: pointer;
             font-weight: 500;
             transition: all 0.2s;
+            font-size: 0.8rem;
         }
 
         .logout-btn:hover {
@@ -101,48 +109,127 @@
             transform: scale(0.96);
         }
 
+        /* Основная область */
         .messenger-layout {
             display: flex;
             flex: 1;
             overflow: hidden;
+            position: relative;
         }
 
+        /* Боковая панель (адаптивная) */
         .sidebar {
-            width: 320px;
+            width: 100%;
+            max-width: 320px;
             background: rgba(15, 23, 42, 0.7);
             border-right: 1px solid rgba(255,255,255,0.1);
             display: flex;
             flex-direction: column;
             overflow-y: auto;
+            transition: transform 0.3s ease;
+            z-index: 10;
+        }
+
+        /* На мобильных устройствах панель по умолчанию видна */
+        @media (max-width: 768px) {
+            .sidebar {
+                position: absolute;
+                left: 0;
+                top: 0;
+                bottom: 0;
+                width: 85%;
+                max-width: 300px;
+                transform: translateX(-100%);
+                z-index: 20;
+                background: rgba(15, 23, 42, 0.95);
+                backdrop-filter: blur(10px);
+            }
+            
+            .sidebar.open {
+                transform: translateX(0);
+            }
+            
+            .chat-area {
+                width: 100%;
+            }
+            
+            /* Кнопка открытия меню */
+            .menu-toggle {
+                display: flex;
+                position: fixed;
+                bottom: 20px;
+                left: 20px;
+                z-index: 25;
+                background: #3b82f6;
+                width: 50px;
+                height: 50px;
+                border-radius: 50%;
+                align-items: center;
+                justify-content: center;
+                cursor: pointer;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+                border: none;
+                color: white;
+                font-size: 24px;
+                transition: 0.2s;
+            }
+            
+            .menu-toggle:hover {
+                transform: scale(1.05);
+                background: #2563eb;
+            }
+            
+            /* Оверлей при открытом меню */
+            .sidebar-overlay {
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background: rgba(0,0,0,0.5);
+                z-index: 15;
+                display: none;
+            }
+            
+            .sidebar-overlay.active {
+                display: block;
+            }
+        }
+
+        @media (min-width: 769px) {
+            .menu-toggle, .sidebar-overlay {
+                display: none;
+            }
         }
 
         .search-section {
-            padding: 20px 16px;
+            padding: 16px;
             border-bottom: 1px solid rgba(255,255,255,0.1);
         }
 
         .search-title {
             color: #cbd5e6;
-            font-size: 0.75rem;
+            font-size: 0.7rem;
             text-transform: uppercase;
             letter-spacing: 1px;
-            margin-bottom: 10px;
+            margin-bottom: 8px;
         }
 
         .search-box {
             display: flex;
             gap: 8px;
-            margin-bottom: 12px;
+            margin-bottom: 10px;
         }
 
         .search-box input {
             flex: 1;
             background: #0f1722;
             border: 1px solid #334155;
-            padding: 10px 14px;
+            padding: 8px 12px;
             border-radius: 28px;
             color: white;
             outline: none;
+            font-size: 0.9rem;
         }
 
         .search-box input:focus {
@@ -157,13 +244,14 @@
             color: white;
             font-weight: bold;
             cursor: pointer;
+            font-size: 0.85rem;
         }
 
         .all-contacts-btn {
             width: 100%;
             background: linear-gradient(135deg, #10b981, #059669);
             border: none;
-            padding: 10px;
+            padding: 8px;
             border-radius: 30px;
             color: white;
             font-weight: bold;
@@ -173,18 +261,19 @@
             align-items: center;
             justify-content: center;
             gap: 8px;
+            font-size: 0.85rem;
         }
 
         .contacts-list {
-            margin-top: 12px;
-            max-height: 300px;
+            margin-top: 10px;
+            max-height: 250px;
             overflow-y: auto;
         }
 
         .contact-item {
             background: rgba(30, 41, 59, 0.5);
             border-radius: 12px;
-            padding: 10px 12px;
+            padding: 8px 10px;
             margin-bottom: 6px;
             display: flex;
             justify-content: space-between;
@@ -199,18 +288,19 @@
             color: #e2e8f0;
             display: flex;
             align-items: center;
-            gap: 8px;
+            gap: 6px;
+            font-size: 0.85rem;
         }
 
         .contact-login {
-            font-size: 0.7rem;
+            font-size: 0.65rem;
             color: #94a3b8;
         }
 
         .start-chat-btn {
             background: #10b981;
             border: none;
-            padding: 6px 12px;
+            padding: 4px 10px;
             border-radius: 20px;
             color: white;
             font-size: 0.7rem;
@@ -220,21 +310,22 @@
 
         .chats-list {
             flex: 1;
-            padding: 16px;
+            padding: 12px;
             overflow-y: auto;
         }
 
         .chats-header {
             color: #94a3b8;
-            font-size: 0.75rem;
-            margin-bottom: 12px;
+            font-size: 0.7rem;
+            margin-bottom: 10px;
+            letter-spacing: 0.5px;
         }
 
         .chat-item {
             background: rgba(30, 41, 59, 0.6);
-            border-radius: 20px;
-            padding: 12px 14px;
-            margin-bottom: 8px;
+            border-radius: 16px;
+            padding: 10px 12px;
+            margin-bottom: 6px;
             cursor: pointer;
             transition: 0.15s;
             display: flex;
@@ -248,7 +339,7 @@
 
         .chat-item.active {
             background: #1e3a8a;
-            border-left: 4px solid #60a5fa;
+            border-left: 3px solid #60a5fa;
         }
 
         .chat-name {
@@ -257,21 +348,24 @@
             display: flex;
             align-items: center;
             gap: 6px;
+            font-size: 0.9rem;
         }
 
         .chat-badge {
             background: #ef4444;
             border-radius: 30px;
-            padding: 2px 8px;
-            font-size: 0.7rem;
+            padding: 2px 6px;
+            font-size: 0.65rem;
             font-weight: bold;
         }
 
+        /* Область чата */
         .chat-area {
             flex: 1;
             display: flex;
             flex-direction: column;
             background: rgba(0, 0, 0, 0.2);
+            overflow: hidden;
         }
 
         .chat-placeholder {
@@ -280,13 +374,15 @@
             align-items: center;
             justify-content: center;
             color: #64748b;
-            font-size: 1.1rem;
+            font-size: 1rem;
             flex-direction: column;
             gap: 10px;
+            text-align: center;
+            padding: 20px;
         }
 
         .active-chat-header {
-            padding: 14px 20px;
+            padding: 12px 16px;
             background: #0f172ad9;
             border-bottom: 1px solid #334155;
             font-weight: bold;
@@ -294,38 +390,47 @@
             display: flex;
             align-items: center;
             gap: 8px;
+            font-size: 0.9rem;
+            flex-shrink: 0;
         }
 
         .messages-container {
             flex: 1;
             overflow-y: auto;
-            padding: 20px;
+            padding: 16px;
             display: flex;
             flex-direction: column;
-            gap: 12px;
+            gap: 8px;
+            -webkit-overflow-scrolling: touch;
         }
 
         .message {
-            max-width: 75%;
-            padding: 10px 14px;
-            border-radius: 24px;
+            max-width: 85%;
+            padding: 8px 12px;
+            border-radius: 20px;
             word-wrap: break-word;
-            font-size: 0.95rem;
+            font-size: 0.9rem;
             position: relative;
+        }
+
+        @media (min-width: 768px) {
+            .message {
+                max-width: 75%;
+            }
         }
 
         .message.outgoing {
             align-self: flex-end;
             background: #3b82f6;
             color: white;
-            border-bottom-right-radius: 6px;
+            border-bottom-right-radius: 4px;
         }
 
         .message.incoming {
             align-self: flex-start;
             background: #1e293b;
             color: #e2e8f0;
-            border-bottom-left-radius: 6px;
+            border-bottom-left-radius: 4px;
         }
 
         .message-text {
@@ -333,21 +438,21 @@
         }
 
         .message-edited {
-            font-size: 0.65rem;
+            font-size: 0.6rem;
             opacity: 0.6;
-            margin-left: 6px;
+            margin-left: 4px;
         }
 
         .message-actions {
             position: absolute;
-            right: 8px;
-            top: -20px;
+            right: 4px;
+            top: -18px;
             display: none;
-            gap: 6px;
+            gap: 4px;
             background: #1e293b;
-            padding: 4px 8px;
-            border-radius: 20px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+            padding: 2px 6px;
+            border-radius: 16px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.3);
         }
 
         .message:hover .message-actions {
@@ -358,18 +463,14 @@
             background: none;
             border: none;
             cursor: pointer;
-            font-size: 0.8rem;
-            padding: 2px 6px;
-            border-radius: 12px;
+            font-size: 0.7rem;
+            padding: 2px 4px;
+            border-radius: 10px;
             transition: 0.1s;
         }
 
         .message.outgoing .message-actions button {
             color: white;
-        }
-
-        .message.incoming .message-actions button {
-            color: #94a3b8;
         }
 
         .message-actions button:hover {
@@ -378,17 +479,17 @@
         }
 
         .message-meta {
-            font-size: 0.65rem;
+            font-size: 0.6rem;
             opacity: 0.7;
             margin-top: 4px;
             display: flex;
             align-items: center;
-            gap: 6px;
+            gap: 4px;
         }
 
         .read-status {
-            font-size: 0.65rem;
-            margin-left: 6px;
+            font-size: 0.6rem;
+            margin-left: 4px;
         }
 
         .read-status.read {
@@ -399,34 +500,39 @@
             color: #94a3b8;
         }
 
+        /* Поле ввода сообщения */
         .message-input-area {
-            padding: 16px;
+            padding: 12px;
             background: #0f172a;
             display: flex;
-            gap: 12px;
+            gap: 8px;
             border-top: 1px solid #334155;
+            flex-shrink: 0;
         }
 
         .message-input-area input {
             flex: 1;
             background: #1e293b;
             border: none;
-            padding: 12px 18px;
+            padding: 10px 14px;
             border-radius: 40px;
             color: white;
             outline: none;
+            font-size: 0.9rem;
         }
 
         .message-input-area button {
             background: #3b82f6;
             border: none;
-            padding: 0 24px;
+            padding: 0 16px;
             border-radius: 40px;
             font-weight: bold;
             color: white;
             cursor: pointer;
+            font-size: 0.85rem;
         }
 
+        /* Форма авторизации */
         .auth-overlay {
             position: fixed;
             top: 0;
@@ -439,37 +545,35 @@
             align-items: center;
             justify-content: center;
             z-index: 1000;
+            padding: 16px;
         }
 
         .auth-card {
             background: #0f172a;
-            border-radius: 48px;
-            padding: 40px 32px;
-            width: 90%;
-            max-width: 420px;
+            border-radius: 32px;
+            padding: 32px 24px;
+            width: 100%;
+            max-width: 400px;
             text-align: center;
             border: 1px solid #38bdf8;
         }
 
         .auth-card h2 {
             color: white;
-            margin-bottom: 24px;
+            margin-bottom: 20px;
+            font-size: 1.3rem;
         }
 
         .auth-card input {
             width: 100%;
-            padding: 14px 18px;
-            margin: 12px 0;
+            padding: 12px 16px;
+            margin: 10px 0;
             background: #1e293b;
             border: 1px solid #475569;
             border-radius: 60px;
             color: white;
-            font-size: 1rem;
+            font-size: 0.95rem;
             outline: none;
-        }
-
-        .auth-card input[type="password"] {
-            letter-spacing: 2px;
         }
 
         .auth-card button {
@@ -479,17 +583,17 @@
             border: none;
             border-radius: 40px;
             font-weight: bold;
-            font-size: 1rem;
+            font-size: 0.95rem;
             color: white;
-            margin-top: 20px;
+            margin-top: 16px;
             cursor: pointer;
         }
 
         .auth-switch {
-            margin-top: 20px;
+            margin-top: 16px;
             color: #94a3b8;
             cursor: pointer;
-            font-size: 0.9rem;
+            font-size: 0.85rem;
         }
 
         .auth-switch span {
@@ -499,7 +603,7 @@
 
         .error-msg {
             color: #f87171;
-            font-size: 0.8rem;
+            font-size: 0.75rem;
             margin-top: 8px;
         }
 
@@ -514,14 +618,15 @@
             align-items: center;
             justify-content: center;
             z-index: 2000;
+            padding: 16px;
         }
 
         .edit-modal-content {
             background: #0f172a;
-            border-radius: 32px;
-            padding: 24px;
-            width: 90%;
-            max-width: 500px;
+            border-radius: 28px;
+            padding: 20px;
+            width: 100%;
+            max-width: 450px;
         }
 
         .edit-modal-content input {
@@ -531,7 +636,7 @@
             border: 1px solid #475569;
             border-radius: 40px;
             color: white;
-            font-size: 1rem;
+            font-size: 0.95rem;
             margin-bottom: 16px;
         }
 
@@ -542,11 +647,12 @@
         }
 
         .edit-modal-buttons button {
-            padding: 8px 20px;
+            padding: 8px 18px;
             border-radius: 40px;
             border: none;
             cursor: pointer;
             font-weight: bold;
+            font-size: 0.85rem;
         }
 
         .save-btn {
@@ -564,14 +670,14 @@
 
 <div class="app-container" id="appContainer" style="display: none;">
     <div class="chat-header">
-        <div class="logo">✨ Давид мессенджер 1580 ✅</div>
+        <div class="logo">✨ Давид мессенджер 1580</div>
         <div class="user-status">
             <span id="currentUsernameDisplay"></span>
             <button class="logout-btn" id="logoutBtn">Выйти</button>
         </div>
     </div>
     <div class="messenger-layout">
-        <div class="sidebar">
+        <div class="sidebar" id="sidebar">
             <div class="search-section">
                 <div class="search-title">🔍 Найти собеседника</div>
                 <div class="search-box">
@@ -587,18 +693,20 @@
                 <div id="chatsListContainer"></div>
             </div>
         </div>
+        <div class="sidebar-overlay" id="sidebarOverlay"></div>
         <div class="chat-area" id="chatArea">
             <div class="chat-placeholder">💬 Выберите чат или найдите пользователя</div>
         </div>
     </div>
+    <button class="menu-toggle" id="menuToggle">☰</button>
 </div>
 
 <div class="auth-overlay" id="authOverlay">
     <div class="auth-card">
         <h2 id="authTitle">📱 Регистрация</h2>
-        <input type="text" id="authLogin" placeholder="Логин (латиница и цифры, без пробелов)" autocomplete="off">
+        <input type="text" id="authLogin" placeholder="Логин (латиница и цифры)" autocomplete="off">
         <input type="text" id="authName" placeholder="Ваше имя" autocomplete="off">
-        <input type="password" id="authPassword" placeholder="Пароль (минимум 4 символа)" autocomplete="new-password">
+        <input type="password" id="authPassword" placeholder="Пароль (мин. 4 символа)" autocomplete="new-password">
         <button id="authSubmitBtn">Зарегистрироваться</button>
         <div class="auth-switch" id="toLoginBtn">Уже есть аккаунт? <span>Войти</span></div>
         <div id="authError" class="error-msg"></div>
@@ -629,6 +737,7 @@
     let isTyping = false;
     let onlineStatusInterval = null;
 
+    // DOM элементы
     const authOverlay = document.getElementById('authOverlay');
     const appContainer = document.getElementById('appContainer');
     const authLoginInput = document.getElementById('authLogin');
@@ -647,8 +756,36 @@
     const allContactsArea = document.getElementById('allContactsArea');
     const chatsListContainer = document.getElementById('chatsListContainer');
     const chatArea = document.getElementById('chatArea');
+    const sidebar = document.getElementById('sidebar');
+    const sidebarOverlay = document.getElementById('sidebarOverlay');
+    const menuToggle = document.getElementById('menuToggle');
 
     let isLoginMode = false;
+
+    // Мобильное меню
+    function closeSidebar() {
+        if (sidebar) sidebar.classList.remove('open');
+        if (sidebarOverlay) sidebarOverlay.classList.remove('active');
+    }
+
+    function openSidebar() {
+        if (sidebar) sidebar.classList.add('open');
+        if (sidebarOverlay) sidebarOverlay.classList.add('active');
+    }
+
+    if (menuToggle) {
+        menuToggle.onclick = () => {
+            if (sidebar.classList.contains('open')) {
+                closeSidebar();
+            } else {
+                openSidebar();
+            }
+        };
+    }
+
+    if (sidebarOverlay) {
+        sidebarOverlay.onclick = closeSidebar;
+    }
 
     function encodeForFirebase(str) {
         return str.replace(/[.#$[\]/]/g, '_').replace(/ /g, '_');
@@ -728,9 +865,7 @@
 
     // ========== ОТМЕТКИ О ПРОЧТЕНИИ ==========
     async function markMessageAsRead(messageId, fromUser, toUser) {
-        // Отмечаем сообщение как прочитанное только если оно адресовано текущему пользователю
         if (toUser !== currentUser.login) return;
-        
         const chatId = [encodeForFirebase(fromUser), encodeForFirebase(toUser)].sort().join('_');
         await db.ref(`messages/${chatId}/${messageId}/read`).set(true);
         await db.ref(`messages/${chatId}/${messageId}/readAt`).set(Date.now());
@@ -789,7 +924,6 @@
             const data = snapshot.val();
             const messages = data ? Object.values(data).sort((a,b) => a.timestamp - b.timestamp) : [];
             
-            // Автоматически отмечаем прочитанными сообщения, адресованные текущему пользователю
             for (const msg of messages) {
                 if (msg.to === currentUser?.login && !msg.read && !msg.deleted) {
                     await markMessageAsRead(msg.id, msg.from, msg.to);
@@ -878,7 +1012,6 @@
         modal.onclick = (e) => { if(e.target === modal) modal.remove(); };
     }
 
-    // Рендер с отображением статуса прочтения
     async function renderMessagesArea(messages) {
         if(!activeChatWith) {
             chatArea.innerHTML = `<div class="chat-placeholder">💬 Выберите чат или найдите пользователя</div>`;
@@ -893,7 +1026,6 @@
             const time = new Date(msg.timestamp).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
             const editedMark = msg.edited ? '<span class="message-edited">(изменено)</span>' : '';
             
-            // Статус прочтения для исходящих сообщений
             let readStatusHtml = '';
             if (isOutgoing) {
                 if (msg.read) {
@@ -925,7 +1057,7 @@
         
         chatArea.innerHTML = `
             <div class="active-chat-header">
-                ${onlineIcon} 👤 ${escapeHtml(activeChatWith)} ${isPartnerOnline ? '<span style="font-size:0.7rem; color:#10b981;">● в сети</span>' : '<span style="font-size:0.7rem; color:#64748b;">● не в сети</span>'}
+                ${onlineIcon} 👤 ${escapeHtml(activeChatWith)} ${isPartnerOnline ? '<span style="font-size:0.65rem; color:#10b981;">● в сети</span>' : '<span style="font-size:0.65rem; color:#64748b;">● не в сети</span>'}
             </div>
             <div class="messages-container" id="messagesContainer">
                 ${messagesHtml || '<div style="text-align:center;color:#64748b;padding:30px;">Нет сообщений</div>'}
@@ -1017,7 +1149,7 @@
                         <div class="chat-name">
                             ${onlineIcon} ${escapeHtml(partner)}
                         </div>
-                        <div style="font-size:0.7rem; color:#94a3b8;">${escapeHtml(chat.lastText || 'Нет сообщений')}</div>
+                        <div style="font-size:0.65rem; color:#94a3b8;">${escapeHtml(chat.lastText || 'Нет сообщений')}</div>
                     </div>
                     ${unreadCount > 0 ? `<div class="chat-badge">${unreadCount}</div>` : ''}
                 </div>
@@ -1025,7 +1157,10 @@
         }
         chatsListContainer.innerHTML = html;
         document.querySelectorAll('.chat-item').forEach(el => {
-            el.addEventListener('click', () => openChatWith(el.getAttribute('data-partner')));
+            el.addEventListener('click', () => {
+                openChatWith(el.getAttribute('data-partner'));
+                closeSidebar();
+            });
         });
     }
 
@@ -1069,6 +1204,7 @@
             btn.addEventListener('click', () => {
                 openChatWith(btn.getAttribute('data-contact'));
                 allContactsArea.innerHTML = '';
+                closeSidebar();
             });
         });
     }
@@ -1093,6 +1229,7 @@
                 openChatWith(user.login);
                 searchResultArea.innerHTML = '';
                 searchUsernameInput.value = '';
+                closeSidebar();
             });
         } else {
             searchResultArea.innerHTML = '<div class="contact-item">❌ Пользователь не найден</div>';
@@ -1188,7 +1325,6 @@
         });
     }
 
-    // Обновляем статусы в реальном времени
     setInterval(() => {
         if(currentUser && activeChatWith) {
             renderMessagesArea(currentChatMessages);

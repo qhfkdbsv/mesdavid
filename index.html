@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="theme-color" content="#0f1724">
-    <title>Давид мессенджер 1580 | Новая база</title>
+    <title>Давид мессенджер 1580</title>
     <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
     <style>
@@ -19,6 +19,8 @@
         .offline { background: #64748b; }
         .logout-btn { background: rgba(239,68,68,0.8); border: none; color: white; padding: 4px 12px; border-radius: 30px; cursor: pointer; font-weight: 500; font-size: 0.8rem; }
         .logout-btn:hover { background: #ef4444; transform: scale(0.96); }
+        .notification-bell { cursor: pointer; font-size: 1.1rem; margin-left: 8px; opacity: 0.7; transition: 0.2s; }
+        .notification-bell.active { opacity: 1; color: #3b82f6; }
         .messenger-layout { display: flex; flex: 1; overflow: hidden; position: relative; }
         .sidebar { width: 100%; max-width: 320px; background: rgba(15, 23, 42, 0.7); border-right: 1px solid rgba(255,255,255,0.1); display: flex; flex-direction: column; overflow-y: auto; transition: transform 0.3s ease; z-index: 10; }
         @media (max-width: 768px) {
@@ -46,7 +48,7 @@
         .chat-item { background: rgba(30, 41, 59, 0.6); border-radius: 16px; padding: 10px 12px; margin-bottom: 6px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
         .chat-item.active { background: #1e3a8a; border-left: 3px solid #60a5fa; }
         .chat-name { font-weight: 600; color: #e2e8f0; display: flex; align-items: center; gap: 6px; font-size: 0.9rem; }
-        .chat-badge { background: #ef4444; border-radius: 30px; padding: 2px 6px; font-size: 0.65rem; font-weight: bold; }
+        .chat-badge { background: #ef4444; border-radius: 30px; padding: 2px 6px; font-size: 0.65rem; font-weight: bold; min-width: 20px; text-align: center; }
         .chat-area { flex: 1; display: flex; flex-direction: column; background: rgba(0, 0, 0, 0.2); overflow: hidden; }
         .chat-placeholder { flex: 1; display: flex; align-items: center; justify-content: center; color: #64748b; flex-direction: column; gap: 10px; text-align: center; padding: 20px; }
         .active-chat-header { padding: 12px 16px; background: #0f172ad9; border-bottom: 1px solid #334155; font-weight: bold; color: white; display: flex; align-items: center; gap: 8px; font-size: 0.9rem; flex-shrink: 0; }
@@ -93,8 +95,12 @@
 
 <div class="app-container" id="appContainer" style="display: none;">
     <div class="chat-header">
-        <div class="logo">✨ Давид мессенджер 1580 🔒</div>
-        <div class="user-status"><span id="currentUsernameDisplay"></span><button class="logout-btn" id="logoutBtn">Выйти</button></div>
+        <div class="logo">✨ Давид мессенджер 1580 🔔</div>
+        <div class="user-status">
+            <span id="currentUsernameDisplay"></span>
+            <span class="notification-bell" id="notificationBell">🔔</span>
+            <button class="logout-btn" id="logoutBtn">Выйти</button>
+        </div>
     </div>
     <div class="messenger-layout">
         <div class="sidebar" id="sidebar">
@@ -126,7 +132,6 @@
 </div>
 
 <script>
-
     const firebaseConfig = {
         apiKey: "AIzaSyCqg05TJinSlbSMN48FXen-r-sBmIfrhWs",
         authDomain: "davids-ba95a.firebaseapp.com",
@@ -147,9 +152,11 @@
     let unsubscribeMessages = null;
     let savedInputText = '';
     let onlineStatusInterval = null;
-    let notificationSound = null;
     let isPageActive = true;
     let messageIdsSet = new Set();
+    let notificationsEnabled = false;
+    let lastNotificationTime = {};
+    let unreadCounts = {};
 
     // DOM
     const authOverlay = document.getElementById('authOverlay');
@@ -174,6 +181,7 @@
     const sidebar = document.getElementById('sidebar');
     const sidebarOverlay = document.getElementById('sidebarOverlay');
     const menuToggle = document.getElementById('menuToggle');
+    const notificationBell = document.getElementById('notificationBell');
 
     let isLoginMode = false;
 
@@ -199,36 +207,95 @@
     function loadSession() { try { return JSON.parse(localStorage.getItem('david_messenger_user')); } catch(e){ return null; } }
     function clearSession() { localStorage.removeItem('david_messenger_user'); }
 
-    // Звук
-    function initNotificationSound() {
-        try {
-            notificationSound = { play: () => {
+    // Уведомления
+    async function requestNotificationPermission() {
+        if (!('Notification' in window)) {
+            notificationBell.style.opacity = '0.5';
+            return false;
+        }
+        if (Notification.permission === 'granted') {
+            notificationsEnabled = true;
+            notificationBell.classList.add('active');
+            notificationBell.textContent = '🔔✅';
+            return true;
+        }
+        if (Notification.permission !== 'denied') {
+            const permission = await Notification.requestPermission();
+            notificationsEnabled = permission === 'granted';
+            if (notificationsEnabled) {
+                notificationBell.classList.add('active');
+                notificationBell.textContent = '🔔✅';
+            } else {
+                notificationBell.style.opacity = '0.5';
+                notificationBell.textContent = '🔕';
+            }
+            return notificationsEnabled;
+        }
+        notificationBell.style.opacity = '0.5';
+        notificationBell.textContent = '🔕';
+        return false;
+    }
+
+    function showNotification(title, message, senderLogin, messageId) {
+        if (!notificationsEnabled) return;
+        if (activeChatWith === senderLogin) return;
+        
+        const now = Date.now();
+        const lastTime = lastNotificationTime[senderLogin] || 0;
+        if (now - lastTime < 3000) return;
+        lastNotificationTime[senderLogin] = now;
+        
+        // Toast-уведомление
+        const toast = document.createElement('div');
+        toast.className = 'notification-toast';
+        toast.innerHTML = `<strong>${escapeHtml(title)}</strong><br>${escapeHtml(message.substring(0, 60))}`;
+        toast.onclick = () => {
+            openChatWith(senderLogin);
+            closeSidebar();
+            toast.remove();
+        };
+        document.body.appendChild(toast);
+        setTimeout(() => toast?.remove(), 5000);
+        
+        // Push-уведомление (если страница не активна)
+        if (!isPageActive && Notification.permission === 'granted') {
+            const notification = new Notification(title, { body: message.substring(0, 100), icon: 'https://img.icons8.com/color/48/chat.png' });
+            notification.onclick = () => {
+                window.focus();
+                openChatWith(senderLogin);
+                notification.close();
+            };
+            setTimeout(() => notification.close(), 8000);
+        }
+        
+        // Звук (тихий)
+        if (!isPageActive) {
+            try {
                 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
                 if (audioCtx.state === 'suspended') audioCtx.resume();
                 const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
                 osc.connect(gain); gain.connect(audioCtx.destination);
-                osc.frequency.value = 800; gain.gain.value = 0.3;
-                osc.start(); gain.gain.exponentialRampToValueAtTime(0.00001, audioCtx.currentTime + 0.5);
-                osc.stop(audioCtx.currentTime + 0.5);
-                setTimeout(() => audioCtx.close(), 600);
-            } };
-        } catch(e) { notificationSound = { play:()=>{} }; }
+                osc.frequency.value = 800;
+                gain.gain.value = 0.2;
+                osc.start();
+                gain.gain.exponentialRampToValueAtTime(0.00001, audioCtx.currentTime + 0.4);
+                osc.stop(audioCtx.currentTime + 0.4);
+                setTimeout(() => audioCtx.close(), 500);
+            } catch(e) {}
+        }
     }
-    function playNotificationSound() { if (notificationSound && !isPageActive) notificationSound.play(); }
 
-    // Уведомления
-    function showNotification(title, message, senderLogin) {
-        const toast = document.createElement('div');
-        toast.className = 'notification-toast';
-        toast.innerHTML = `<div class="notification-title">${escapeHtml(title)}</div><div class="notification-message">${escapeHtml(message)}</div>`;
-        if (senderLogin) toast.onclick = () => { openChatWith(senderLogin); closeSidebar(); toast.remove(); };
-        document.body.appendChild(toast);
-        setTimeout(() => { toast?.remove(); }, 5000);
-        if (!isPageActive && Notification.permission === 'granted') new Notification(title, { body: message });
-        playNotificationSound();
+    function updatePageTitle() {
+        let totalUnread = 0;
+        for (const key in unreadCounts) {
+            totalUnread += unreadCounts[key] || 0;
+        }
+        if (totalUnread > 0) {
+            document.title = `(${totalUnread}) Давид мессенджер 1580`;
+        } else {
+            document.title = 'Давид мессенджер 1580';
+        }
     }
-    function requestNotificationPermission() { if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission(); }
-    document.addEventListener('visibilitychange', () => { isPageActive = !document.hidden; if (isPageActive && activeChatWith) markAsRead(activeChatWith); });
 
     // Онлайн статус
     async function updateOnlineStatus(isOnline) { if (!currentUser) return; await db.ref(`online/${encodeForFirebase(currentUser.login)}`).set({ status: isOnline, lastSeen: Date.now(), name: currentUser.name }); }
@@ -238,15 +305,76 @@
 
     // Сообщения
     async function markMessageAsRead(messageId, fromUser, toUser) { if (toUser !== currentUser.login) return; const chatId = [encodeForFirebase(fromUser), encodeForFirebase(toUser)].sort().join('_'); await db.ref(`messages/${chatId}/${messageId}/read`).set(true); }
-    async function markAllMessagesAsRead(withUser) { const chatId = [encodeForFirebase(currentUser.login), encodeForFirebase(withUser)].sort().join('_'); const messages = (await db.ref(`messages/${chatId}`).once('value')).val() || {}; const updates = {}; for (const [id, msg] of Object.entries(messages)) if (msg.to === currentUser.login && !msg.read && !msg.deleted) updates[`${id}/read`] = true; if (Object.keys(updates).length) await db.ref(`messages/${chatId}`).update(updates); }
-    async function markAsRead(withUser) { await db.ref(`unread/${encodeForFirebase(currentUser.login)}/${encodeForFirebase(withUser)}`).set(0); await markAllMessagesAsRead(withUser); }
-    async function sendMessage(toLogin, text) { if(!text.trim()) return; const chatId = [encodeForFirebase(currentUser.login), encodeForFirebase(toLogin)].sort().join('_'); const newMsg = { id: Date.now()+'_'+Math.random().toString(36).substr(2,9), from: currentUser.login, to: toLogin, text: text.trim(), timestamp: Date.now(), edited: false, deleted: false, read: false }; await db.ref(`messages/${chatId}/${newMsg.id}`).set(newMsg); const lastText = text.trim().substring(0,50); const safeC=encodeForFirebase(currentUser.login), safeT=encodeForFirebase(toLogin); await db.ref(`lastMessages/${safeC}/${safeT}`).set({ lastText, timestamp: Date.now(), withUser: toLogin }); await db.ref(`lastMessages/${safeT}/${safeC}`).set({ lastText, timestamp: Date.now(), withUser: currentUser.login }); const unread = (await db.ref(`unread/${safeT}/${safeC}`).once('value')).val()||0; await db.ref(`unread/${safeT}/${safeC}`).set(unread+1); }
+    async function markAllMessagesAsRead(withUser) { 
+        const chatId = [encodeForFirebase(currentUser.login), encodeForFirebase(withUser)].sort().join('_'); 
+        const messages = (await db.ref(`messages/${chatId}`).once('value')).val() || {}; 
+        const updates = {}; 
+        for (const [id, msg] of Object.entries(messages)) 
+            if (msg.to === currentUser.login && !msg.read && !msg.deleted) updates[`${id}/read`] = true; 
+        if (Object.keys(updates).length) await db.ref(`messages/${chatId}`).update(updates); 
+    }
+    
+    async function markAsRead(withUser) { 
+        await db.ref(`unread/${encodeForFirebase(currentUser.login)}/${encodeForFirebase(withUser)}`).set(0);
+        unreadCounts[withUser] = 0;
+        await markAllMessagesAsRead(withUser);
+        updatePageTitle();
+        renderChatsList();
+    }
+    
+    async function updateUnreadCount(partnerLogin, increment = true) {
+        const safeCurrent = encodeForFirebase(currentUser.login);
+        const safePartner = encodeForFirebase(partnerLogin);
+        const currentUnread = (await db.ref(`unread/${safeCurrent}/${safePartner}`).once('value')).val() || 0;
+        let newCount = increment ? currentUnread + 1 : Math.max(0, currentUnread - 1);
+        await db.ref(`unread/${safeCurrent}/${safePartner}`).set(newCount);
+        unreadCounts[partnerLogin] = newCount;
+        updatePageTitle();
+        renderChatsList();
+    }
+    
+    async function sendMessage(toLogin, text) {
+        if(!text.trim()) return; 
+        const chatId = [encodeForFirebase(currentUser.login), encodeForFirebase(toLogin)].sort().join('_'); 
+        const newMsg = { 
+            id: Date.now()+'_'+Math.random().toString(36).substr(2,9), 
+            from: currentUser.login, 
+            to: toLogin, 
+            text: text.trim(), 
+            timestamp: Date.now(), 
+            edited: false, 
+            deleted: false, 
+            read: false 
+        }; 
+        await db.ref(`messages/${chatId}/${newMsg.id}`).set(newMsg); 
+        const lastText = text.trim().substring(0,50); 
+        const safeC=encodeForFirebase(currentUser.login), safeT=encodeForFirebase(toLogin); 
+        await db.ref(`lastMessages/${safeC}/${safeT}`).set({ lastText, timestamp: Date.now(), withUser: toLogin }); 
+        await db.ref(`lastMessages/${safeT}/${safeC}`).set({ lastText, timestamp: Date.now(), withUser: currentUser.login }); 
+        await updateUnreadCount(toLogin, true);
+    }
+    
     async function deleteMessage(messageId, withUser) { const chatId = [encodeForFirebase(currentUser.login), encodeForFirebase(withUser)].sort().join('_'); await db.ref(`messages/${chatId}/${messageId}/deleted`).set(true); }
     async function editMessage(messageId, withUser, newText) { if(!newText.trim()) return; const chatId = [encodeForFirebase(currentUser.login), encodeForFirebase(withUser)].sort().join('_'); await db.ref(`messages/${chatId}/${messageId}`).update({ text: newText.trim(), edited: true, timestamp: Date.now() }); }
-    function showEditModal(messageId, currentText, withUser) { const modal = document.createElement('div'); modal.className = 'edit-modal'; modal.innerHTML = `<div class="edit-modal-content"><input type="text" id="editInput" value="${escapeHtml(currentText)}"><div class="edit-modal-buttons"><button class="cancel-btn">Отмена</button><button class="save-btn">Сохранить</button></div></div>`; document.body.appendChild(modal); const input = modal.querySelector('#editInput'); input.focus(); input.select(); modal.querySelector('.save-btn').onclick = async () => { const newText = input.value.trim(); if(newText && newText !== currentText) await editMessage(messageId, withUser, newText); modal.remove(); }; modal.querySelector('.cancel-btn').onclick = () => modal.remove(); modal.onclick = (e) => { if(e.target === modal) modal.remove(); }; }
+    
+    function showEditModal(messageId, currentText, withUser) { 
+        const modal = document.createElement('div'); 
+        modal.className = 'edit-modal'; 
+        modal.innerHTML = `<div class="edit-modal-content"><input type="text" id="editInput" value="${escapeHtml(currentText)}"><div class="edit-modal-buttons"><button class="cancel-btn">Отмена</button><button class="save-btn">Сохранить</button></div></div>`; 
+        document.body.appendChild(modal); 
+        const input = modal.querySelector('#editInput'); 
+        input.focus(); 
+        input.select(); 
+        modal.querySelector('.save-btn').onclick = async () => { 
+            const newText = input.value.trim(); 
+            if(newText && newText !== currentText) await editMessage(messageId, withUser, newText); 
+            modal.remove(); 
+        }; 
+        modal.querySelector('.cancel-btn').onclick = () => modal.remove(); 
+        modal.onclick = (e) => { if(e.target === modal) modal.remove(); }; 
+    }
 
-    // Функция добавления одного сообщения
-    function addMessageToDOM(msg, isPartnerOnline = false) {
+    function addMessageToDOM(msg) {
         const container = document.getElementById('messagesContainer');
         if (!container) return;
         if (messageIdsSet.has(msg.id)) return;
@@ -255,7 +383,7 @@
         const isOutgoing = msg.from === currentUser.login;
         const time = new Date(msg.timestamp).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
         const editedMark = msg.edited ? '<span class="message-edited">(изменено)</span>' : '';
-        const readStatusHtml = isOutgoing ? (msg.read ? '<span class="read-status read">✅ прочитано</span>' : '<span class="read-status sent">✓ отправлено</span>') : '';
+        const readStatusHtml = isOutgoing ? (msg.read ? '<span class="read-status read">✓✓ прочитано</span>' : '<span class="read-status sent">✓ отправлено</span>') : '';
         
         const div = document.createElement('div');
         div.className = `message ${isOutgoing ? 'outgoing' : 'incoming'}`;
@@ -270,7 +398,6 @@
         setTimeout(() => container.scrollTop = container.scrollHeight, 50);
     }
 
-    // Создание чата с нуля
     async function initChatArea(messages) {
         const isPartnerOnline = await getUserOnlineStatus(activeChatWith);
         const onlineIcon = isPartnerOnline ? '<span class="online-indicator online"></span>' : '<span class="online-indicator offline"></span>';
@@ -279,7 +406,7 @@
             const isOutgoing = msg.from === currentUser.login;
             const time = new Date(msg.timestamp).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
             const editedMark = msg.edited ? '<span class="message-edited">(изменено)</span>' : '';
-            const readStatusHtml = isOutgoing ? (msg.read ? '<span class="read-status read">✅ прочитано</span>' : '<span class="read-status sent">✓ отправлено</span>') : '';
+            const readStatusHtml = isOutgoing ? (msg.read ? '<span class="read-status read">✓✓ прочитано</span>' : '<span class="read-status sent">✓ отправлено</span>') : '';
             return `<div class="message ${isOutgoing ? 'outgoing' : 'incoming'}" data-message-id="${msg.id}"><div class="message-text">${escapeHtml(msg.text)}${editedMark}</div><div class="message-meta"><span>${time}</span>${readStatusHtml}</div>${isOutgoing ? `<div class="message-actions"><button class="edit-msg">✏️</button><button class="delete-msg">🗑️</button></div>` : ''}</div>`;
         }).join('');
         
@@ -327,7 +454,6 @@
         }
     }
 
-    // Обработчик новых сообщений (только добавляет, не перерисовывает)
     function onMessagesUpdate(messages) {
         if (!activeChatWith) return;
         const container = document.getElementById('messagesContainer');
@@ -335,26 +461,27 @@
             initChatArea(messages);
             return;
         }
-        // Находим новые сообщения (которых ещё нет в DOM)
         const existingIds = new Set();
         document.querySelectorAll('.message[data-message-id]').forEach(el => existingIds.add(el.getAttribute('data-message-id')));
         
         for (const msg of messages.filter(m => !m.deleted)) {
             if (!existingIds.has(msg.id)) {
                 addMessageToDOM(msg);
+                if (msg.to === currentUser.login && !msg.read && msg.from !== currentUser.login && !isPageActive) {
+                    const senderName = msg.from;
+                    showNotification(`📩 Новое сообщение от ${senderName}`, msg.text.substring(0, 60), senderName, msg.id);
+                }
             } else {
-                // Обновляем статус прочтения
                 const el = document.querySelector(`.message[data-message-id="${msg.id}"]`);
                 if (el && msg.from === currentUser.login) {
                     const readSpan = el.querySelector('.read-status');
                     if (readSpan && msg.read) {
                         readSpan.className = 'read-status read';
-                        readSpan.innerHTML = '✅ прочитано';
+                        readSpan.innerHTML = '✓✓ прочитано';
                     }
                 }
             }
         }
-        // Удаляем удалённые
         document.querySelectorAll('.message[data-message-id]').forEach(el => {
             const id = el.getAttribute('data-message-id');
             const msg = messages.find(m => m.id === id);
@@ -369,9 +496,8 @@
             const data = snapshot.val();
             const messages = data ? Object.values(data).sort((a,b) => a.timestamp - b.timestamp) : [];
             for (const msg of messages) {
-                if (msg.to === currentUser?.login && !msg.read && !msg.deleted) await markMessageAsRead(msg.id, msg.from, msg.to);
-                if (msg.to === currentUser?.login && !msg.read && !msg.deleted && msg.from !== currentUser?.login && !isPageActive) {
-                    showNotification(`📩 Новое сообщение от ${msg.from}`, msg.text.substring(0, 50), msg.from);
+                if (msg.to === currentUser?.login && !msg.read && !msg.deleted && msg.from !== currentUser?.login) {
+                    await markMessageAsRead(msg.id, msg.from, msg.to);
                 }
             }
             callback(messages);
@@ -400,26 +526,69 @@
         let html = '';
         for(const chat of chatsArray) {
             const partner = chat.withUser;
-            const unread = (await db.ref(`unread/${safeCurrent}/${encodeForFirebase(partner)}`).once('value')).val() || 0;
+            const unreadCount = (await db.ref(`unread/${safeCurrent}/${encodeForFirebase(partner)}`).once('value')).val() || 0;
+            unreadCounts[partner] = unreadCount;
             const activeClass = activeChatWith === partner ? 'active' : '';
             const isOnline = await getUserOnlineStatus(partner);
             const onlineIcon = isOnline ? '<span class="online-indicator online"></span>' : '<span class="online-indicator offline"></span>';
-            html += `<div class="chat-item ${activeClass}" data-partner="${partner}"><div><div class="chat-name">${onlineIcon} ${escapeHtml(partner)}</div><div style="font-size:0.65rem;color:#94a3b8;">${escapeHtml(chat.lastText || 'Нет сообщений')}</div></div>${unread > 0 ? `<div class="chat-badge">${unread}</div>` : ''}</div>`;
+            html += `<div class="chat-item ${activeClass}" data-partner="${partner}"><div><div class="chat-name">${onlineIcon} ${escapeHtml(partner)}</div><div style="font-size:0.65rem;color:#94a3b8;">${escapeHtml(chat.lastText || 'Нет сообщений')}</div></div>${unreadCount > 0 ? `<div class="chat-badge">${unreadCount}</div>` : ''}</div>`;
         }
         chatsListContainer.innerHTML = html;
         document.querySelectorAll('.chat-item').forEach(el => { el.addEventListener('click', () => { openChatWith(el.getAttribute('data-partner')); closeSidebar(); }); });
+        updatePageTitle();
     }
 
     async function getAllUsers() { return Object.values((await db.ref('users').once('value')).val() || {}); }
     async function findUserByLogin(login) { return (await db.ref(`users/${encodeForFirebase(login)}`).once('value')).val(); }
     async function saveUser(login, name, password) { await db.ref(`users/${encodeForFirebase(login)}`).set({ login, safeLogin: encodeForFirebase(login), name, passwordHash: hashPassword(password), createdAt: Date.now() }); }
     async function verifyUser(login, password) { const user = await findUserByLogin(login); if (!user) throw new Error('Пользователь не найден'); if (user.passwordHash !== hashPassword(password)) throw new Error('Неверный пароль'); return user; }
-    async function renderAllContacts() { const users = await getAllUsers(); const filtered = users.filter(u => u.login !== currentUser.login); if(filtered.length === 0) { allContactsArea.innerHTML = '<div style="color:#94a3b8;text-align:center;padding:10px;">Нет других пользователей</div>'; return; } let html = '<div class="contacts-list">'; for(const c of filtered) { const isOnline = await getUserOnlineStatus(c.login); const onlineIcon = isOnline ? '<span class="online-indicator online"></span>' : '<span class="online-indicator offline"></span>'; html += `<div class="contact-item"><div class="contact-info">${onlineIcon} <span>👤 ${escapeHtml(c.name || c.login)}</span><div class="contact-login">@${escapeHtml(c.login)}</div></div><button class="start-chat-btn" data-contact="${c.login}">💬 Написать</button></div>`; } html += '</div>'; allContactsArea.innerHTML = html; document.querySelectorAll('[data-contact]').forEach(btn => { btn.addEventListener('click', () => { openChatWith(btn.getAttribute('data-contact')); allContactsArea.innerHTML = ''; closeSidebar(); }); }); }
-    async function searchUser() { const query = searchUsernameInput.value.trim(); if(!query) return; const user = await findUserByLogin(query); if(user && user.login !== currentUser.login) { const isOnline = await getUserOnlineStatus(user.login); const onlineIcon = isOnline ? '<span class="online-indicator online"></span>' : '<span class="online-indicator offline"></span>'; searchResultArea.innerHTML = `<div class="contact-item" style="margin-top:8px;"><div class="contact-info">${onlineIcon} <span>👤 ${escapeHtml(user.name || user.login)}</span><div class="contact-login">@${escapeHtml(user.login)}</div></div><button class="start-chat-btn" id="searchStartChat">💬 Написать</button></div>`; document.getElementById('searchStartChat')?.addEventListener('click', () => { openChatWith(user.login); searchResultArea.innerHTML = ''; searchUsernameInput.value = ''; closeSidebar(); }); } else { searchResultArea.innerHTML = '<div class="contact-item">❌ Пользователь не найден</div>'; setTimeout(() => searchResultArea.innerHTML = '', 2000); } }
+    
+    async function renderAllContacts() { 
+        const users = await getAllUsers(); 
+        const filtered = users.filter(u => u.login !== currentUser.login); 
+        if(filtered.length === 0) { allContactsArea.innerHTML = '<div style="color:#94a3b8;text-align:center;padding:10px;">Нет других пользователей</div>'; return; } 
+        let html = '<div class="contacts-list">'; 
+        for(const c of filtered) { 
+            const isOnline = await getUserOnlineStatus(c.login); 
+            const onlineIcon = isOnline ? '<span class="online-indicator online"></span>' : '<span class="online-indicator offline"></span>'; 
+            html += `<div class="contact-item"><div class="contact-info">${onlineIcon} <span>👤 ${escapeHtml(c.name || c.login)}</span><div class="contact-login">@${escapeHtml(c.login)}</div></div><button class="start-chat-btn" data-contact="${c.login}">💬 Написать</button></div>`; 
+        } 
+        html += '</div>'; 
+        allContactsArea.innerHTML = html; 
+        document.querySelectorAll('[data-contact]').forEach(btn => { btn.addEventListener('click', () => { openChatWith(btn.getAttribute('data-contact')); allContactsArea.innerHTML = ''; closeSidebar(); }); }); 
+    }
+    
+    async function searchUser() { 
+        const query = searchUsernameInput.value.trim(); 
+        if(!query) return; 
+        const user = await findUserByLogin(query); 
+        if(user && user.login !== currentUser.login) { 
+            const isOnline = await getUserOnlineStatus(user.login); 
+            const onlineIcon = isOnline ? '<span class="online-indicator online"></span>' : '<span class="online-indicator offline"></span>'; 
+            searchResultArea.innerHTML = `<div class="contact-item" style="margin-top:8px;"><div class="contact-info">${onlineIcon} <span>👤 ${escapeHtml(user.name || user.login)}</span><div class="contact-login">@${escapeHtml(user.login)}</div></div><button class="start-chat-btn" id="searchStartChat">💬 Написать</button></div>`; 
+            document.getElementById('searchStartChat')?.addEventListener('click', () => { openChatWith(user.login); searchResultArea.innerHTML = ''; searchUsernameInput.value = ''; closeSidebar(); }); 
+        } else { 
+            searchResultArea.innerHTML = '<div class="contact-item">❌ Пользователь не найден</div>'; 
+            setTimeout(() => searchResultArea.innerHTML = '', 2000); 
+        } 
+    }
+    
     async function register(login, name, password) { login = validateLogin(login); validatePassword(password); if(await findUserByLogin(login)) throw new Error('Логин уже занят'); await saveUser(login, name, password); return { login, name }; }
     async function loginUser(login, password) { return await verifyUser(validateLogin(login), validatePassword(password)); }
+    
     async function autoLogin() { const saved = loadSession(); if(saved?.login) { const user = await findUserByLogin(saved.login); if(user) { setCurrentUser(user); authOverlay.style.display = 'none'; appContainer.style.display = 'flex'; return true; } } return false; }
-    function setCurrentUser(user) { currentUser = user; currentUsernameDisplay.innerText = user.name + ' (@' + user.login + ')'; activeChatWith = null; if(unsubscribeMessages) unsubscribeMessages(); startOnlineHeartbeat(); renderChatsList(); chatArea.innerHTML = `<div class="chat-placeholder">💬 Выберите чат или найдите пользователя</div>`; messageIdsSet.clear(); }
+    
+    function setCurrentUser(user) { 
+        currentUser = user; 
+        currentUsernameDisplay.innerText = user.name + ' (@' + user.login + ')'; 
+        activeChatWith = null; 
+        if(unsubscribeMessages) unsubscribeMessages(); 
+        startOnlineHeartbeat(); 
+        renderChatsList(); 
+        chatArea.innerHTML = `<div class="chat-placeholder">💬 Выберите чат или найдите пользователя</div>`; 
+        messageIdsSet.clear(); 
+    }
+    
     function logout() { stopOnlineHeartbeat(); if(unsubscribeMessages) unsubscribeMessages(); currentUser = null; activeChatWith = null; clearSession(); appContainer.style.display = 'none'; authOverlay.style.display = 'flex'; }
 
     authSubmitBtn.onclick = async () => {
@@ -432,9 +601,9 @@
             appContainer.style.display = 'flex';
             authPasswordInput.value = '';
             requestNotificationPermission();
-            initNotificationSound();
         } catch(err) { authErrorSpan.innerText = err.message; }
     };
+    
     toLoginBtn.onclick = () => {
         isLoginMode = !isLoginMode;
         if(isLoginMode) { authTitle.innerText = '🔐 Вход'; authSubmitBtn.innerText = 'Войти'; authNameInput.style.display = 'none'; }
@@ -442,9 +611,16 @@
         authErrorSpan.innerText = '';
         authLoginInput.value = ''; authNameInput.value = ''; authPasswordInput.value = '';
     };
+    
     logoutBtn.onclick = logout;
     searchUserBtn.onclick = searchUser;
     allContactsBtn.onclick = () => { if(allContactsArea.innerHTML === '') renderAllContacts(); else allContactsArea.innerHTML = ''; };
+    notificationBell.onclick = () => requestNotificationPermission();
+
+    document.addEventListener('visibilitychange', () => { 
+        isPageActive = !document.hidden; 
+        if (isPageActive && activeChatWith) markAsRead(activeChatWith); 
+    });
 
     setInterval(async () => {
         if(currentUser && activeChatWith) {
@@ -458,7 +634,6 @@
         if(currentUser) renderChatsList();
     }, 5000);
 
-    initNotificationSound();
     requestNotificationPermission();
     autoLogin().then(auto => { if(!auto) { authOverlay.style.display = 'flex'; appContainer.style.display = 'none'; } });
 </script>

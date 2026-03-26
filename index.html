@@ -10,33 +10,162 @@
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif; -webkit-tap-highlight-color: transparent; }
         body { background: linear-gradient(145deg, #1e2a3a 0%, #0f1724 100%); min-height: 100vh; display: flex; justify-content: center; align-items: center; padding: 0; margin: 0; }
-        .app-container { width: 100%; max-width: 1400px; height: 100vh; background: rgba(255,255,255,0.05); backdrop-filter: blur(2px); border-radius: 32px; box-shadow: 0 25px 45px rgba(0,0,0,0.3), 0 0 0 1px rgba(255,255,255,0.1); overflow: hidden; display: flex; flex-direction: column; position: relative; }
-        .chat-header { background: rgba(0,0,0,0.4); padding: 14px 16px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.15); flex-shrink: 0; min-height: 60px; }
+        
+        /* Контейнер с отступом для статус-бара на телефоне */
+        .app-container { 
+            width: 100%; 
+            max-width: 1400px; 
+            height: 100vh; 
+            background: rgba(255,255,255,0.05); 
+            backdrop-filter: blur(2px); 
+            border-radius: 32px; 
+            box-shadow: 0 25px 45px rgba(0,0,0,0.3), 0 0 0 1px rgba(255,255,255,0.1); 
+            overflow: hidden; 
+            display: flex; 
+            flex-direction: column; 
+            position: relative;
+        }
+        
+        /* Шапка с отступом от статус-бара */
+        .chat-header { 
+            background: rgba(0,0,0,0.4); 
+            padding: 12px 16px; 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+            border-bottom: 1px solid rgba(255,255,255,0.15); 
+            flex-shrink: 0; 
+            min-height: 60px;
+        }
+        
+        /* Для телефонов добавляем отступ сверху */
+        @media (max-width: 768px) {
+            .chat-header { 
+                padding-top: calc(12px + env(safe-area-inset-top, 0px));
+                min-height: calc(60px + env(safe-area-inset-top, 0px));
+            }
+            .app-container { 
+                border-radius: 0;
+                height: 100vh;
+            }
+        }
+        
         .logo { font-weight: 700; font-size: 1.2rem; background: linear-gradient(135deg, #a5f3fc, #38bdf8); -webkit-background-clip: text; background-clip: text; color: transparent; }
-        .user-status { background: #1e293b; padding: 6px 14px; border-radius: 40px; display: flex; align-items: center; gap: 10px; color: white; font-size: 0.85rem; }
+        
+        .user-status { 
+            background: #1e293b; 
+            padding: 8px 16px; 
+            border-radius: 40px; 
+            display: flex; 
+            align-items: center; 
+            gap: 12px; 
+            color: white; 
+            font-size: 0.85rem; 
+        }
+        
+        @media (max-width: 768px) {
+            .user-status { padding: 6px 14px; gap: 8px; font-size: 0.8rem; }
+            .logo { font-size: 1rem; }
+        }
+        
         .online-indicator { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 4px; }
         .online { background: #10b981; box-shadow: 0 0 5px #10b981; }
         .offline { background: #64748b; }
-        .logout-btn { background: rgba(239,68,68,0.8); border: none; color: white; padding: 6px 14px; border-radius: 30px; cursor: pointer; font-weight: 500; font-size: 0.8rem; transition: 0.2s; }
-        .logout-btn:active { transform: scale(0.95); background: #ef4444; }
-        .notification-bell { cursor: pointer; font-size: 1.2rem; margin-left: 8px; opacity: 0.7; transition: 0.2s; padding: 4px; }
+        
+        .logout-btn { 
+            background: #ef4444; 
+            border: none; 
+            color: white; 
+            padding: 8px 16px; 
+            border-radius: 30px; 
+            cursor: pointer; 
+            font-weight: 500; 
+            font-size: 0.85rem; 
+            transition: 0.2s;
+            min-width: 70px;
+        }
+        .logout-btn:active { transform: scale(0.95); background: #dc2626; }
+        
+        .notification-bell { 
+            cursor: pointer; 
+            font-size: 1.3rem; 
+            margin: 0 4px; 
+            opacity: 0.8; 
+            transition: 0.2s; 
+            padding: 6px;
+            display: inline-flex;
+            align-items: center;
+        }
         .notification-bell.active { opacity: 1; color: #3b82f6; }
         .notification-bell:active { transform: scale(0.9); }
+        
         .messenger-layout { display: flex; flex: 1; overflow: hidden; position: relative; }
-        .sidebar { width: 100%; max-width: 320px; background: rgba(15, 23, 42, 0.95); backdrop-filter: blur(10px); border-right: 1px solid rgba(255,255,255,0.1); display: flex; flex-direction: column; overflow-y: auto; transition: transform 0.3s ease; z-index: 20; }
+        
+        .sidebar { 
+            width: 100%; 
+            max-width: 320px; 
+            background: rgba(15, 23, 42, 0.95); 
+            backdrop-filter: blur(10px); 
+            border-right: 1px solid rgba(255,255,255,0.1); 
+            display: flex; 
+            flex-direction: column; 
+            overflow-y: auto; 
+            transition: transform 0.3s ease; 
+            z-index: 20; 
+        }
+        
         @media (max-width: 768px) {
-            .sidebar { position: absolute; left: 0; top: 0; bottom: 0; width: 85%; max-width: 300px; transform: translateX(-100%); z-index: 30; background: rgba(15, 23, 42, 0.98); backdrop-filter: blur(12px); }
+            .sidebar { 
+                position: absolute; 
+                left: 0; 
+                top: 0; 
+                bottom: 0; 
+                width: 85%; 
+                max-width: 300px; 
+                transform: translateX(-100%); 
+                z-index: 30; 
+                background: rgba(15, 23, 42, 0.98); 
+                backdrop-filter: blur(12px); 
+            }
             .sidebar.open { transform: translateX(0); }
             .chat-area { width: 100%; }
-            .menu-toggle { display: flex; position: fixed; bottom: 80px; left: 16px; z-index: 25; background: #3b82f6; width: 52px; height: 52px; border-radius: 50%; align-items: center; justify-content: center; cursor: pointer; box-shadow: 0 4px 12px rgba(0,0,0,0.4); border: none; color: white; font-size: 26px; transition: 0.2s; touch-action: manipulation; }
+            .menu-toggle { 
+                display: flex; 
+                position: fixed; 
+                bottom: 20px; 
+                left: 16px; 
+                z-index: 25; 
+                background: #3b82f6; 
+                width: 56px; 
+                height: 56px; 
+                border-radius: 50%; 
+                align-items: center; 
+                justify-content: center; 
+                cursor: pointer; 
+                box-shadow: 0 4px 12px rgba(0,0,0,0.4); 
+                border: none; 
+                color: white; 
+                font-size: 28px; 
+                transition: 0.2s; 
+                touch-action: manipulation;
+            }
             .menu-toggle:active { transform: scale(0.95); background: #2563eb; }
-            .sidebar-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.6); z-index: 25; display: none; backdrop-filter: blur(4px); }
+            .sidebar-overlay { 
+                position: fixed; 
+                top: 0; 
+                left: 0; 
+                right: 0; 
+                bottom: 0; 
+                background: rgba(0,0,0,0.6); 
+                z-index: 25; 
+                display: none; 
+                backdrop-filter: blur(4px); 
+            }
             .sidebar-overlay.active { display: block; }
-            .chat-header { padding: 12px 12px; min-height: 56px; }
-            .user-status { padding: 5px 12px; gap: 8px; font-size: 0.8rem; }
-            .logo { font-size: 1rem; }
         }
+        
         @media (min-width: 769px) { .menu-toggle, .sidebar-overlay { display: none; } }
+        
         .search-section { padding: 16px; border-bottom: 1px solid rgba(255,255,255,0.1); }
         .search-title { color: #cbd5e6; font-size: 0.7rem; text-transform: uppercase; margin-bottom: 8px; }
         .search-box { display: flex; gap: 8px; margin-bottom: 10px; }
@@ -48,6 +177,7 @@
         .contact-info { color: #e2e8f0; display: flex; align-items: center; gap: 8px; font-size: 0.9rem; }
         .contact-login { font-size: 0.7rem; color: #94a3b8; }
         .start-chat-btn { background: #10b981; border: none; padding: 6px 12px; border-radius: 20px; color: white; font-size: 0.75rem; cursor: pointer; font-weight: bold; }
+        
         .chats-list { flex: 1; padding: 12px; overflow-y: auto; }
         .chats-header { color: #94a3b8; font-size: 0.7rem; margin-bottom: 10px; }
         .chat-item { background: rgba(30, 41, 59, 0.6); border-radius: 16px; padding: 12px 14px; margin-bottom: 8px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; transition: 0.1s; }
@@ -55,6 +185,7 @@
         .chat-item.active { background: #1e3a8a; border-left: 3px solid #60a5fa; }
         .chat-name { font-weight: 600; color: #e2e8f0; display: flex; align-items: center; gap: 8px; font-size: 0.9rem; }
         .chat-badge { background: #ef4444; border-radius: 30px; padding: 2px 8px; font-size: 0.7rem; font-weight: bold; min-width: 24px; text-align: center; }
+        
         .chat-area { flex: 1; display: flex; flex-direction: column; background: rgba(0, 0, 0, 0.2); overflow: hidden; }
         .chat-placeholder { flex: 1; display: flex; align-items: center; justify-content: center; color: #64748b; flex-direction: column; gap: 10px; text-align: center; padding: 20px; }
         .active-chat-header { padding: 12px 16px; background: #0f172ad9; border-bottom: 1px solid #334155; font-weight: bold; color: white; display: flex; align-items: center; gap: 8px; font-size: 0.9rem; flex-shrink: 0; }
@@ -73,11 +204,43 @@
         .read-status { font-size: 0.6rem; margin-left: 4px; }
         .read-status.read { color: #10b981; }
         .read-status.sent { color: #94a3b8; }
-        .message-input-area { padding: 12px; background: #0f172a; display: flex; gap: 8px; border-top: 1px solid #334155; flex-shrink: 0; }
+        
+        .message-input-area { 
+            padding: 12px; 
+            background: #0f172a; 
+            display: flex; 
+            gap: 8px; 
+            border-top: 1px solid #334155; 
+            flex-shrink: 0;
+            padding-bottom: max(12px, env(safe-area-inset-bottom, 12px));
+        }
         .message-input-area input { flex: 1; background: #1e293b; border: none; padding: 12px 16px; border-radius: 40px; color: white; outline: none; font-size: 0.95rem; }
         .message-input-area button { background: #3b82f6; border: none; padding: 0 20px; border-radius: 40px; font-weight: bold; color: white; cursor: pointer; font-size: 0.9rem; min-height: 44px; }
-        .notification-toast { position: fixed; top: 70px; right: 16px; background: #1e293b; border-left: 4px solid #3b82f6; border-radius: 12px; padding: 12px 16px; color: white; box-shadow: 0 4px 12px rgba(0,0,0,0.4); z-index: 1000; animation: slideIn 0.3s ease; max-width: 280px; cursor: pointer; backdrop-filter: blur(10px); }
+        
+        .notification-toast { 
+            position: fixed; 
+            top: max(60px, env(safe-area-inset-top, 60px)); 
+            right: 16px; 
+            left: 16px;
+            background: #1e293b; 
+            border-left: 4px solid #3b82f6; 
+            border-radius: 12px; 
+            padding: 12px 16px; 
+            color: white; 
+            box-shadow: 0 4px 12px rgba(0,0,0,0.4); 
+            z-index: 1000; 
+            animation: slideIn 0.3s ease; 
+            max-width: 320px;
+            cursor: pointer; 
+            backdrop-filter: blur(10px);
+        }
+        @media (max-width: 768px) {
+            .notification-toast { top: max(70px, env(safe-area-inset-top, 70px)); left: 12px; right: 12px; max-width: none; font-size: 0.85rem; }
+            .message-input-area button { padding: 0 16px; min-height: 48px; }
+            .message-input-area input { padding: 14px 16px; font-size: 1rem; }
+        }
         @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+        
         .auth-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); backdrop-filter: blur(8px); display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 16px; }
         .auth-card { background: #0f172a; border-radius: 32px; padding: 32px 24px; width: 100%; max-width: 400px; text-align: center; border: 1px solid #38bdf8; }
         .auth-card h2 { color: white; margin-bottom: 20px; font-size: 1.3rem; }
@@ -88,6 +251,7 @@
         .auth-switch { margin-top: 16px; color: #94a3b8; cursor: pointer; font-size: 0.85rem; }
         .auth-switch span { color: #60a5fa; text-decoration: underline; }
         .error-msg { color: #f87171; font-size: 0.75rem; margin-top: 8px; }
+        
         .edit-modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); display: flex; align-items: center; justify-content: center; z-index: 2000; padding: 16px; }
         .edit-modal-content { background: #0f172a; border-radius: 28px; padding: 20px; width: 100%; max-width: 450px; }
         .edit-modal-content input { width: 100%; padding: 12px 16px; background: #1e293b; border: 1px solid #475569; border-radius: 40px; color: white; font-size: 0.95rem; margin-bottom: 16px; }
@@ -95,11 +259,6 @@
         .edit-modal-buttons button { padding: 8px 18px; border-radius: 40px; border: none; cursor: pointer; font-weight: bold; font-size: 0.85rem; }
         .save-btn { background: #10b981; color: white; }
         .cancel-btn { background: #475569; color: white; }
-        @media (max-width: 768px) {
-            .notification-toast { top: 60px; right: 12px; left: 12px; max-width: none; font-size: 0.85rem; }
-            .message-input-area button { padding: 0 16px; min-height: 48px; }
-            .message-input-area input { padding: 14px 16px; font-size: 1rem; }
-        }
     </style>
 </head>
 <body>
@@ -216,7 +375,6 @@
     function loadSession() { try { return JSON.parse(localStorage.getItem('david_messenger_user')); } catch(e){ return null; } }
     function clearSession() { localStorage.removeItem('david_messenger_user'); }
 
-    // Уведомления с постоянным разрешением
     async function requestNotificationPermission() {
         if (!('Notification' in window)) {
             notificationBell.style.opacity = '0.5';
@@ -255,7 +413,6 @@
         if (now - lastTime < 3000) return;
         lastNotificationTime[senderLogin] = now;
         
-        // Toast-уведомление (всегда показывается)
         const toast = document.createElement('div');
         toast.className = 'notification-toast';
         toast.innerHTML = `<strong>${escapeHtml(title)}</strong><br>${escapeHtml(message.substring(0, 60))}`;
@@ -267,7 +424,6 @@
         document.body.appendChild(toast);
         setTimeout(() => toast?.remove(), 5000);
         
-        // Push-уведомление (даже если страница закрыта или телефон заблокирован)
         if (Notification.permission === 'granted') {
             const notification = new Notification(title, { 
                 body: message.substring(0, 100), 
@@ -285,7 +441,6 @@
             setTimeout(() => notification.close(), 10000);
         }
         
-        // Короткий звук (только если страница не активна или в фоне)
         if (!isPageActive) {
             try {
                 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -304,14 +459,8 @@
 
     function updatePageTitle() {
         let totalUnread = 0;
-        for (const key in unreadCounts) {
-            totalUnread += unreadCounts[key] || 0;
-        }
-        if (totalUnread > 0) {
-            document.title = `(${totalUnread}) Давид мессенджер 1580`;
-        } else {
-            document.title = 'Давид мессенджер 1580';
-        }
+        for (const key in unreadCounts) totalUnread += unreadCounts[key] || 0;
+        document.title = totalUnread > 0 ? `(${totalUnread}) Давид мессенджер 1580` : 'Давид мессенджер 1580';
     }
 
     async function updateOnlineStatus(isOnline) { if (!currentUser) return; await db.ref(`online/${encodeForFirebase(currentUser.login)}`).set({ status: isOnline, lastSeen: Date.now(), name: currentUser.name }); }
@@ -324,11 +473,9 @@
         const chatId = [encodeForFirebase(currentUser.login), encodeForFirebase(withUser)].sort().join('_'); 
         const messages = (await db.ref(`messages/${chatId}`).once('value')).val() || {}; 
         const updates = {}; 
-        for (const [id, msg] of Object.entries(messages)) 
-            if (msg.to === currentUser.login && !msg.read && !msg.deleted) updates[`${id}/read`] = true; 
+        for (const [id, msg] of Object.entries(messages)) if (msg.to === currentUser.login && !msg.read && !msg.deleted) updates[`${id}/read`] = true; 
         if (Object.keys(updates).length) await db.ref(`messages/${chatId}`).update(updates); 
     }
-    
     async function markAsRead(withUser) { 
         await db.ref(`unread/${encodeForFirebase(currentUser.login)}/${encodeForFirebase(withUser)}`).set(0);
         unreadCounts[withUser] = 0;
@@ -336,7 +483,6 @@
         updatePageTitle();
         renderChatsList();
     }
-    
     async function updateUnreadCount(partnerLogin, increment = true) {
         const safeCurrent = encodeForFirebase(currentUser.login);
         const safePartner = encodeForFirebase(partnerLogin);
@@ -347,20 +493,10 @@
         updatePageTitle();
         renderChatsList();
     }
-    
     async function sendMessage(toLogin, text) {
         if(!text.trim()) return; 
         const chatId = [encodeForFirebase(currentUser.login), encodeForFirebase(toLogin)].sort().join('_'); 
-        const newMsg = { 
-            id: Date.now()+'_'+Math.random().toString(36).substr(2,9), 
-            from: currentUser.login, 
-            to: toLogin, 
-            text: text.trim(), 
-            timestamp: Date.now(), 
-            edited: false, 
-            deleted: false, 
-            read: false 
-        }; 
+        const newMsg = { id: Date.now()+'_'+Math.random().toString(36).substr(2,9), from: currentUser.login, to: toLogin, text: text.trim(), timestamp: Date.now(), edited: false, deleted: false, read: false }; 
         await db.ref(`messages/${chatId}/${newMsg.id}`).set(newMsg); 
         const lastText = text.trim().substring(0,50); 
         const safeC=encodeForFirebase(currentUser.login), safeT=encodeForFirebase(toLogin); 
@@ -368,7 +504,6 @@
         await db.ref(`lastMessages/${safeT}/${safeC}`).set({ lastText, timestamp: Date.now(), withUser: currentUser.login }); 
         await updateUnreadCount(toLogin, true);
     }
-    
     async function deleteMessage(messageId, withUser) { const chatId = [encodeForFirebase(currentUser.login), encodeForFirebase(withUser)].sort().join('_'); await db.ref(`messages/${chatId}/${messageId}/deleted`).set(true); }
     async function editMessage(messageId, withUser, newText) { if(!newText.trim()) return; const chatId = [encodeForFirebase(currentUser.login), encodeForFirebase(withUser)].sort().join('_'); await db.ref(`messages/${chatId}/${messageId}`).update({ text: newText.trim(), edited: true, timestamp: Date.now() }); }
     
@@ -380,11 +515,7 @@
         const input = modal.querySelector('#editInput'); 
         input.focus(); 
         input.select(); 
-        modal.querySelector('.save-btn').onclick = async () => { 
-            const newText = input.value.trim(); 
-            if(newText && newText !== currentText) await editMessage(messageId, withUser, newText); 
-            modal.remove(); 
-        }; 
+        modal.querySelector('.save-btn').onclick = async () => { const newText = input.value.trim(); if(newText && newText !== currentText) await editMessage(messageId, withUser, newText); modal.remove(); }; 
         modal.querySelector('.cancel-btn').onclick = () => modal.remove(); 
         modal.onclick = (e) => { if(e.target === modal) modal.remove(); }; 
     }
@@ -394,18 +525,15 @@
         if (!container) return;
         if (messageIdsSet.has(msg.id)) return;
         messageIdsSet.add(msg.id);
-        
         const isOutgoing = msg.from === currentUser.login;
         const time = new Date(msg.timestamp).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
         const editedMark = msg.edited ? '<span class="message-edited">(изменено)</span>' : '';
         const readStatusHtml = isOutgoing ? (msg.read ? '<span class="read-status read">✓✓ прочитано</span>' : '<span class="read-status sent">✓ отправлено</span>') : '';
-        
         const div = document.createElement('div');
         div.className = `message ${isOutgoing ? 'outgoing' : 'incoming'}`;
         div.setAttribute('data-message-id', msg.id);
         div.innerHTML = `<div class="message-text">${escapeHtml(msg.text)}${editedMark}</div><div class="message-meta"><span>${time}</span>${readStatusHtml}</div>${isOutgoing ? `<div class="message-actions"><button class="edit-msg">✏️</button><button class="delete-msg">🗑️</button></div>` : ''}`;
         container.appendChild(div);
-        
         if (isOutgoing) {
             div.querySelector('.edit-msg').onclick = () => showEditModal(msg.id, msg.text, activeChatWith);
             div.querySelector('.delete-msg').onclick = async () => { if(confirm('Удалить?')) await deleteMessage(msg.id, activeChatWith); };
@@ -416,7 +544,6 @@
     async function initChatArea(messages) {
         const isPartnerOnline = await getUserOnlineStatus(activeChatWith);
         const onlineIcon = isPartnerOnline ? '<span class="online-indicator online"></span>' : '<span class="online-indicator offline"></span>';
-        
         const messagesHtml = messages.filter(m => !m.deleted).map(msg => {
             const isOutgoing = msg.from === currentUser.login;
             const time = new Date(msg.timestamp).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
@@ -424,17 +551,14 @@
             const readStatusHtml = isOutgoing ? (msg.read ? '<span class="read-status read">✓✓ прочитано</span>' : '<span class="read-status sent">✓ отправлено</span>') : '';
             return `<div class="message ${isOutgoing ? 'outgoing' : 'incoming'}" data-message-id="${msg.id}"><div class="message-text">${escapeHtml(msg.text)}${editedMark}</div><div class="message-meta"><span>${time}</span>${readStatusHtml}</div>${isOutgoing ? `<div class="message-actions"><button class="edit-msg">✏️</button><button class="delete-msg">🗑️</button></div>` : ''}</div>`;
         }).join('');
-        
         const currentInputText = document.getElementById('messageInput')?.value || savedInputText;
         chatArea.innerHTML = `
             <div class="active-chat-header" id="activeChatHeader">${onlineIcon} 👤 ${escapeHtml(activeChatWith)} ${isPartnerOnline ? '<span style="font-size:0.65rem; color:#10b981;">● в сети</span>' : '<span style="font-size:0.65rem; color:#64748b;">● не в сети</span>'}</div>
             <div class="messages-container" id="messagesContainer">${messagesHtml || '<div style="text-align:center;color:#64748b;padding:30px;">Нет сообщений</div>'}</div>
             <div class="message-input-area"><input type="text" id="messageInput" placeholder="Введите сообщение..." autocomplete="off" value="${escapeHtml(currentInputText)}"><button id="sendMsgBtn">➤ Отправить</button></div>
         `;
-        
         messageIdsSet.clear();
         messages.forEach(m => { if(!m.deleted) messageIdsSet.add(m.id); });
-        
         document.querySelectorAll('.edit-msg').forEach(btn => {
             const msgDiv = btn.closest('.message');
             const msgId = msgDiv?.getAttribute('data-message-id');
@@ -446,7 +570,6 @@
             const msgId = msgDiv?.getAttribute('data-message-id');
             btn.onclick = async () => { if(confirm('Удалить?')) await deleteMessage(msgId, activeChatWith); };
         });
-        
         const msgInput = document.getElementById('messageInput');
         const sendBtn = document.getElementById('sendMsgBtn');
         if(msgInput) {
@@ -472,28 +595,18 @@
     function onMessagesUpdate(messages) {
         if (!activeChatWith) return;
         const container = document.getElementById('messagesContainer');
-        if (!container) {
-            initChatArea(messages);
-            return;
-        }
+        if (!container) { initChatArea(messages); return; }
         const existingIds = new Set();
         document.querySelectorAll('.message[data-message-id]').forEach(el => existingIds.add(el.getAttribute('data-message-id')));
-        
         for (const msg of messages.filter(m => !m.deleted)) {
             if (!existingIds.has(msg.id)) {
                 addMessageToDOM(msg);
-                if (msg.to === currentUser.login && !msg.read && msg.from !== currentUser.login) {
-                    const senderName = msg.from;
-                    showNotification(`📩 Новое сообщение от ${senderName}`, msg.text.substring(0, 60), senderName);
-                }
+                if (msg.to === currentUser.login && !msg.read && msg.from !== currentUser.login) showNotification(`📩 Новое сообщение от ${msg.from}`, msg.text.substring(0, 60), msg.from);
             } else {
                 const el = document.querySelector(`.message[data-message-id="${msg.id}"]`);
                 if (el && msg.from === currentUser.login) {
                     const readSpan = el.querySelector('.read-status');
-                    if (readSpan && msg.read) {
-                        readSpan.className = 'read-status read';
-                        readSpan.innerHTML = '✓✓ прочитано';
-                    }
+                    if (readSpan && msg.read) { readSpan.className = 'read-status read'; readSpan.innerHTML = '✓✓ прочитано'; }
                 }
             }
         }
@@ -510,11 +623,7 @@
         messagesRef.on('value', async (snapshot) => {
             const data = snapshot.val();
             const messages = data ? Object.values(data).sort((a,b) => a.timestamp - b.timestamp) : [];
-            for (const msg of messages) {
-                if (msg.to === currentUser?.login && !msg.read && !msg.deleted && msg.from !== currentUser?.login) {
-                    await markMessageAsRead(msg.id, msg.from, msg.to);
-                }
-            }
+            for (const msg of messages) if (msg.to === currentUser?.login && !msg.read && !msg.deleted && msg.from !== currentUser?.login) await markMessageAsRead(msg.id, msg.from, msg.to);
             callback(messages);
         });
         return () => messagesRef.off();
@@ -525,10 +634,7 @@
         activeChatWith = partnerLogin;
         savedInputText = '';
         await markAsRead(partnerLogin);
-        unsubscribeMessages = subscribeToMessages(currentUser.login, partnerLogin, (messages) => {
-            currentChatMessages = messages;
-            onMessagesUpdate(messages);
-        });
+        unsubscribeMessages = subscribeToMessages(currentUser.login, partnerLogin, (messages) => { currentChatMessages = messages; onMessagesUpdate(messages); });
         renderChatsList();
     }
 
@@ -632,10 +738,7 @@
     allContactsBtn.onclick = () => { if(allContactsArea.innerHTML === '') renderAllContacts(); else allContactsArea.innerHTML = ''; };
     notificationBell.onclick = () => requestNotificationPermission();
 
-    document.addEventListener('visibilitychange', () => { 
-        isPageActive = !document.hidden; 
-        if (isPageActive && activeChatWith) markAsRead(activeChatWith); 
-    });
+    document.addEventListener('visibilitychange', () => { isPageActive = !document.hidden; if (isPageActive && activeChatWith) markAsRead(activeChatWith); });
 
     setInterval(async () => {
         if(currentUser && activeChatWith) {
@@ -649,15 +752,8 @@
         if(currentUser) renderChatsList();
     }, 5000);
 
-    // Восстанавливаем разрешение уведомлений
     if (localStorage.getItem('notifications_enabled') === 'true') {
-        Notification.requestPermission().then(perm => {
-            if (perm === 'granted') {
-                notificationsEnabled = true;
-                notificationBell.classList.add('active');
-                notificationBell.textContent = '🔔✅';
-            }
-        });
+        Notification.requestPermission().then(perm => { if (perm === 'granted') { notificationsEnabled = true; notificationBell.classList.add('active'); notificationBell.textContent = '🔔✅'; } });
     }
     
     requestNotificationPermission();
